@@ -84,6 +84,9 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
+    // Conversa com a versão de relógio pelo Bluetooth
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
+
     // Testes da lógica das escalas
     testImplementation("junit:junit:4.13.2")
     // org.json do Android não funciona fora do aparelho: os testes da IA usam esta implementação

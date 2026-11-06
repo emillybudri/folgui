@@ -109,7 +109,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
 
     val voce = perfil?.comoPessoa(excecoesVoce.toMap()) ?: Pessoa(Pessoa.ID_VOCE, "Você", TipoEscala.SEMANAL, hoje())
 
-    LaunchedEffect(Unit) { recarregar() }
+    // A primeira leitura e, depois, cada evento marcado pelo relógio com o app aberto
+    LaunchedEffect(Unit) { mudancasDoRelogio.collect { recarregar() } }
 
     val todas = listOf(voce) + pessoas
 

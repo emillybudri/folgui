@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@array/android_wear_capabilities">
+    <!-- É assim que o relógio descobre qual aparelho tem o Folgui -->
+    <string-array name="android_wear_capabilities" translatable="false">
+        <item>folgui_celular</item>
+    </string-array>
+</resources>

@@ -42,6 +42,19 @@ Todos os arquivos ficam em `app/src/main/java/com/example/folgui`. Para quem est
 | Telas | Arquivos `Telas*.kt` e `EtapasEscala.kt` |
 | Aparência | `Tema.kt` e `Componentes.kt` |
 
+## Versão de relógio
+
+O módulo `wear` é um app para Wear OS (Galaxy Watch, Pixel Watch). Não funciona no Apple Watch.
+
+1. A pessoa toca no microfone e fala: "marque almoço com a Bia amanhã às 13h".
+2. O relógio transforma a fala em texto e manda para o celular pelo Bluetooth.
+3. No celular, o `RelogioService` chama a mesma IA do assistente e confere conflitos com trabalho e sono.
+4. O relógio mostra e fala o resumo e pergunta "É isso mesmo?".
+5. Com o "Sim", o celular salva o evento, agenda o lembrete e grava na Google Agenda, se ela estiver conectada.
+
+Escala, eventos e chave do Gemini ficam só no celular. Pelo relógio dá para marcar compromissos; o resto se faz no celular.
+Os dois apps precisam ter o mesmo `applicationId` e a mesma assinatura para conversar.
+
 ## Design
 
 Cada cor tem um só significado, e as telas usam ícones e rótulos curtos. As regras estão em [docs/DESIGN.md](docs/DESIGN.md).

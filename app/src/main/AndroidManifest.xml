@@ -41,6 +41,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Recebe os pedidos feitos no relógio, mesmo com o app fechado -->
+        <service
+            android:name=".RelogioService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/folgui"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".ReminderReceiver"
             android:exported="false" />

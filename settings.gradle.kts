@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "folgui"
 
 include(":app")
+include(":wear")

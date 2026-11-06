@@ -517,7 +517,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
         val eventosAgora = eventos.toList()
         val contexto = contextoParaIA(pessoasAgora, eventosAgora, agenda.toMap(), feriados.toMap())
         val indice = mensagensIA.size
-        mensagensIA.add(MensagemIA(deUsuario = true, texto = pedido ?: "Áudio enviado", audioSegundos = segundos))
+        mensagensIA.add(MensagemIA(deUsuario = true, texto = pedido ?: "Transcrevendo…", audioSegundos = segundos))
         pensando = true
         scope.launch {
             val resposta = try {
@@ -526,8 +526,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 }
                 val r = assistente.conversar(contexto, historico, pessoasAgora, eventosAgora, pedido, base64)
                 // O texto do áudio fica visível: é a primeira forma de conferir se a IA ouviu certo
-                if (audio != null && r.transcricao.isNotBlank()) {
-                    mensagensIA[indice] = mensagensIA[indice].copy(texto = r.transcricao)
+                if (audio != null) {
+                    mensagensIA[indice] = mensagensIA[indice].copy(texto = r.transcricao.ifBlank { "Áudio sem transcrição" })
                 }
                 val (validas, avisos) = verificarAcoes(r.mensagem.acoes, pessoasAgora, eventosAgora)
                 r.mensagem.copy(
@@ -541,6 +541,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 MensagemIA(deUsuario = false, texto = "Sem conexão com a IA. Verifique a internet e tente de novo.")
             } finally {
                 audio?.delete()
+            }
+            // Se a IA falhou, o balão não fica preso em "Transcrevendo…"
+            if (audio != null && mensagensIA[indice].texto == "Transcrevendo…") {
+                mensagensIA[indice] = mensagensIA[indice].copy(texto = "Áudio enviado")
             }
             mensagensIA.add(resposta)
             pensando = false

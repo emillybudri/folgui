@@ -35,7 +35,7 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${ambiente["GEMINI_API_KEY"].orEmpty()}\"")
-        buildConfigField("String", "GEMINI_MODEL", "\"${ambiente["GEMINI_MODEL"] ?: "gemini-flash-latest"}\"")
+        buildConfigField("String", "GEMINI_MODEL", "\"${ambiente["GEMINI_MODEL"] ?: "gemini-3-flash-preview"}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT", "\"${clienteWebGoogle()}\"")
     }
 

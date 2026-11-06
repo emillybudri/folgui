@@ -17,7 +17,7 @@ import java.net.URL
 private const val URL_API = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 /** Se o modelo principal estiver lotado ou sem cota, a conversa segue nestes, em ordem. */
-private val MODELOS_RESERVA = listOf("gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
+private val MODELOS_RESERVA = listOf("gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite")
 
 /** O áudio é gravado em AAC (ver GravadorAudio), formato aceito pelo Gemini. */
 const val MIME_AUDIO = "audio/aac"
@@ -128,7 +128,7 @@ class AssistenteIA(private val chave: String, private val modelo: String) {
         try {
             conexao.requestMethod = "POST"
             conexao.connectTimeout = 15_000
-            conexao.readTimeout = 45_000
+            conexao.readTimeout = 25_000
             conexao.doOutput = true
             conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             conexao.setRequestProperty("x-goog-api-key", chave)
@@ -206,8 +206,9 @@ internal fun montarCorpo(
 
     val config = JSONObject().put("responseMimeType", "application/json")
     if (estruturado) {
-        config.put("responseJsonSchema", esquemaResposta())
-        config.put("thinkingConfig", JSONObject().put("thinkingLevel", "MEDIUM"))
+        config.put("responseJsonSchema", esquemaResposta(comAudio = audioBase64 != null))
+        // Em testes, "LOW" respondeu em 2 a 3 segundos, contra 6 a 10 do "MEDIUM"
+        config.put("thinkingConfig", JSONObject().put("thinkingLevel", "LOW"))
     }
     return JSONObject()
         .put("systemInstruction", JSONObject().put("parts", texto(INSTRUCOES + "\n\n" + contexto)))
@@ -215,7 +216,7 @@ internal fun montarCorpo(
         .put("generationConfig", config)
 }
 
-private fun esquemaResposta(): JSONObject {
+private fun esquemaResposta(comAudio: Boolean): JSONObject {
     fun tipo(t: String) = JSONObject().put("type", t)
     val codigos = JSONArray().apply { TipoAcaoIA.entries.forEach { put(it.codigo) } }
     val acao = JSONObject()
@@ -250,7 +251,11 @@ private fun esquemaResposta(): JSONObject {
                 .put("resposta", tipo("string"))
                 .put("acoes", tipo("array").put("items", acao))
         )
-        .put("required", JSONArray().put("entendi").put("resposta").put("acoes"))
+        // Com áudio, a transcrição é obrigatória: é o que a pessoa lê no balão da conversa
+        .put(
+            "required",
+            JSONArray().apply { if (comAudio) put("transcricao") }.put("entendi").put("resposta").put("acoes")
+        )
 }
 
 private val INSTRUCOES = """

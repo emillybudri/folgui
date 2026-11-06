@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Consumo de API REST (feriados, previsão do tempo e Gemini) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Pedidos por áudio para a IA -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Notificações locais e agendamento de alarme exato -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Reagenda os lembretes quando o celular é reiniciado -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Leitura dos compromissos da Google Agenda (inclusive eventos compartilhados) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!-- Os eventos marcados no Folgui também são gravados na Google Agenda -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="Folgui"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Folgui">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

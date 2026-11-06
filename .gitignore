@@ -1,0 +1,27 @@
+# Chave da API do Gemini: nunca vai para o Git
+.env
+
+# Configuração do Firebase de cada projeto
+google-services.json
+
+# O APK leva a chave embutida: distribua fora do repositório
+apks/
+*.apk
+*.aab
+
+# Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Sistema
+.DS_Store
+Thumbs.db

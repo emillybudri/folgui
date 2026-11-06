@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="marca">#A897FF</color>
+    <color name="fundo">#0F0E13</color>
+
+    <style name="Theme.Folgui" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:colorAccent">@color/marca</item>
+        <item name="android:datePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+        <item name="android:timePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+    </style>
+
+    <style name="Theme.Folgui.Dialogo" parent="android:Theme.Material.Dialog">
+        <item name="android:colorAccent">@color/marca</item>
+    </style>
+</resources>

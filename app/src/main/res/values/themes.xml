@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="marca">#6246EA</color>
+    <color name="fundo">#FAF9F7</color>
+    <!-- Fundo da tela de abertura (igual nos temas claro e escuro) -->
+    <color name="abertura">#6246EA</color>
+
+    <style name="Theme.Folgui" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:colorAccent">@color/marca</item>
+        <item name="android:datePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+        <item name="android:timePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+    </style>
+
+    <!-- Seletores de data e horário com a cor do app -->
+    <style name="Theme.Folgui.Dialogo" parent="android:Theme.Material.Light.Dialog">
+        <item name="android:colorAccent">@color/marca</item>
+    </style>
+</resources>

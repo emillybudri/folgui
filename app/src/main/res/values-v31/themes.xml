@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Folgui" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:colorAccent">@color/marca</item>
+        <item name="android:datePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+        <item name="android:timePickerDialogTheme">@style/Theme.Folgui.Dialogo</item>
+        <!-- Splash screen do sistema (Android 12+): fundo verde com o ícone do app -->
+        <item name="android:windowSplashScreenBackground">@color/abertura</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+    <style name="Theme.Folgui.Dialogo" parent="android:Theme.Material.Light.Dialog">
+        <item name="android:colorAccent">@color/marca</item>
+    </style>
+</resources>

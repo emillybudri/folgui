@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ilustração gerada com formas simples (círculos, retângulos e arcos) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="160dp"
+    android:viewportWidth="240"
+    android:viewportHeight="160">
+    <path android:fillColor="#D5E3FF" android:pathData="M50,82a70,70 0,1 0,140,0a70,70 0,1 0,-140,0z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M74,82a46,46 0,1 0,92,0a46,46 0,1 0,-92,0z" />
+    <path android:fillColor="#FFC24D" android:pathData="M120,36a46,46 0,0 0,0,92z" />
+    <path android:fillColor="#3D5F90" android:pathData="M120,36a46,46 0,0 1,0,92z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M86,82a34,34 0,1 0,68,0a34,34 0,1 0,-68,0z" />
+    <path android:strokeColor="#2D3130" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M120,82v-22" />
+    <path android:strokeColor="#2D3130" android:strokeWidth="4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M120,82l14,10" />
+    <path android:fillColor="#2D3130" android:pathData="M116,82a4,4 0,1 0,8,0a4,4 0,1 0,-8,0z" />
+    <path android:fillColor="#FFC24D" android:pathData="M28,40a14,14 0,1 0,28,0a14,14 0,1 0,-28,0z" />
+    <path android:strokeColor="#FFC24D" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M42,16v-6M42,70v-6M18,40h-6M72,40h-6M25,23l-4,-4M63,61l-4,-4M25,57l-4,4M63,19l-4,4" />
+    <path android:fillColor="#3D5F90" android:pathData="M196,30a14,14 0,0 0,0,28a18.2,18.2 0,0 1,0,-28z" />
+    <path android:fillColor="#FFC24D" android:pathData="M214,69l1.5,3.5l3.5,1.5l-3.5,1.5l-1.5,3.5l-1.5,-3.5l-3.5,-1.5l3.5,-1.5z" />
+    <path android:fillColor="#FFC24D" android:pathData="M180,16l1.2,2.8l2.8,1.2l-2.8,1.2l-1.2,2.8l-1.2,-2.8l-2.8,-1.2l2.8,-1.2z" />
+</vector>

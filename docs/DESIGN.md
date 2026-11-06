@@ -29,6 +29,15 @@ As 11 cores de grupo são as da Google Agenda (`CorGrupo` em `Grupos.kt`) e iden
 
 Hoje · Agenda · **+** · Eventos · Pessoas. A barra da IA e o perfil ficam fixos no topo das abas.
 
+## Movimento
+
+O movimento conta para onde a pessoa foi, e nenhuma transição passa de 300 ms. As regras estão em `Transicoes.kt`.
+
+- **Abas:** passo curto para o lado, na ordem das abas.
+- **Ir mais fundo:** a tela nova entra pelo lado e a anterior recua um pouco. Voltar faz o caminho inverso.
+- **Formulário e assistente:** sobem como uma folha e descem ao fechar.
+- **Login e cadastro:** só fade.
+
 ## Componentes
 
 - **Cartões:** brancos, sem borda, com sombra leve e cantos de 24dp.
@@ -39,6 +48,7 @@ Hoje · Agenda · **+** · Eventos · Pessoas. A barra da IA e o perfil ficam fi
 - **Feriado:** a escala não sabe se a empresa abre, então o app pergunta "Você trabalhará neste dia?".
 - **Entrada:** splash, login (Google ou e-mail) e, só então, o cadastro da rotina.
 - **Etapas do cadastro:** círculo com ícone e número embaixo, sem nome visível.
+- **Widgets:** repetem o cartão de hoje, os círculos dos dias e os pontos de grupo. As cores ficam em `widget_cores.xml`, com os mesmos valores de `Tema.kt`. O texto usa a cor geral, não a do estado: assim ele acompanha o tema escuro sem o app precisar rodar. Sem espaço, sai a informação extra, nunca o estado do dia.
 
 ## Textos
 

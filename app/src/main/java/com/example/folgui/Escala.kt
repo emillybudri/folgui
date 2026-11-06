@@ -435,8 +435,7 @@ data class Pessoa(
     }
 
     /** Situação neste instante: (ocupado?, texto). */
-    fun situacaoAgora(): Pair<Boolean, String> {
-        val agora = minutoAtual()
+    fun situacaoAgora(agora: Int = minutoAtual()): Pair<Boolean, String> {
         val dia = Math.floorDiv(agora, MINUTOS_DIA)
         if (emFerias(dia)) return false to "De férias"
         val blocos = (dia - 2..dia + 1).flatMap(::blocosDoDia)
@@ -461,6 +460,28 @@ data class Pessoa(
             Math.floorDiv(proximo.inicio, MINUTOS_DIA) == dia -> "Livre agora · entra às ${horaCurta(proximo.inicio)}"
             else -> "Livre agora · amanhã entra às ${horaCurta(proximo.inicio)}"
         }
+    }
+
+    /** A situação sem o começo da frase: "Sai às 18h", "Livre agora". */
+    fun agoraCurto(agora: Int = minutoAtual()): String = situacaoAgora(agora).second.substringAfter("· ").capitalizar()
+
+    /** Quando o dia de hoje vira outra coisa: "Folga amanhã", "Até sáb, 7 nov". */
+    fun proximoEstado(diaHoje: Int = hoje()): String? = when (status(diaHoje)) {
+        StatusDia.FERIAS -> feriasFim?.let { "Até ${diaResumido(it)}" }
+        StatusDia.FOLGA -> proximoDia(diaHoje + 1, livre = false)?.let { "Trabalho ${rotuloRelativo(it).lowercase()}" }
+        StatusDia.TRABALHO -> proximoDia(diaHoje + 1, livre = true)?.let { "Folga ${rotuloRelativo(it).lowercase()}" }
+    }
+
+    /** Próximo minuto em que a situação pode mudar: fim ou começo de um bloco, ou a virada do dia. */
+    fun proximaMudanca(agora: Int = minutoAtual()): Int {
+        val dia = Math.floorDiv(agora, MINUTOS_DIA)
+        val viradaDoDia = (dia + 1) * MINUTOS_DIA
+        if (emFerias(dia)) return viradaDoDia
+        return (dia - 2..dia).flatMap(::blocosDoDia)
+            .flatMap { listOf(it.inicio, it.fim) }
+            .filter { it > agora }
+            .minOrNull()
+            ?.coerceAtMost(viradaDoDia) ?: viradaDoDia
     }
 
     /** Próximo dia (a partir de [aPartirDe], inclusive) em que a pessoa estará livre ou trabalhando. */

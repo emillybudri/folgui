@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_hoje_nome">Hoje</string>
+    <string name="widget_hoje_descricao">Se hoje é trabalho ou folga e o que vem a seguir</string>
+    <string name="widget_semana_nome">Semana</string>
+    <string name="widget_semana_descricao">Os próximos 7 dias da sua escala</string>
+    <string name="widget_compromissos_nome">Compromissos</string>
+    <string name="widget_compromissos_descricao">Seus próximos compromissos, do Folgui e da Google Agenda</string>
+    <string name="widget_app">Folgui</string>
+    <string name="widget_novo">Novo evento</string>
+    <string name="widget_sem_compromissos">Sem compromissos</string>
+
+    <dimen name="widget_raio">24dp</dimen>
+    <dimen name="widget_raio_interno">14dp</dimen>
+    <dimen name="widget_margem">16dp</dimen>
+
+    <style name="WidgetTexto">
+        <item name="android:textColor">@color/widget_texto</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+    <style name="WidgetTexto.Titulo">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+    <style name="WidgetTexto.Rotulo">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+    <style name="WidgetTexto.Suave">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/widget_texto_suave</item>
+    </style>
+    <style name="WidgetTexto.Pilula" parent="WidgetTexto.Rotulo">
+        <item name="android:background">@drawable/widget_pilula</item>
+        <item name="android:paddingStart">10dp</item>
+        <item name="android:paddingEnd">10dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+    </style>
+</resources>

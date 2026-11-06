@@ -120,5 +120,8 @@ fun NavHostController.irParaAba(rota: String) {
     }
 }
 
+/** Posição da aba na barra, que define o lado da transição. */
+fun indiceAba(rota: String?): Int = ABAS.indexOfFirst { it.rota == rota }
+
 /** As abas só aparecem nas telas principais. */
 fun rotaTemAbas(rota: String?): Boolean = ABAS.any { it.rota == rota }

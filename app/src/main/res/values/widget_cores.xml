@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_superficie">#FFFFFF</color>
+    <color name="widget_texto">#1C1B22</color>
+    <color name="widget_texto_suave">#6B6875</color>
+    <color name="widget_marca">#6246EA</color>
+    <color name="widget_folga_fundo">#D3F5E3</color>
+    <color name="widget_folga_forte">#0B8F5A</color>
+    <color name="widget_trabalho_fundo">#FFE0DA</color>
+    <color name="widget_trabalho_forte">#D9432C</color>
+    <color name="widget_ferias_fundo">#D9ECFF</color>
+    <color name="widget_ferias_forte">#1F78D6</color>
+</resources>

@@ -192,12 +192,8 @@ private fun CartaoHoje(voce: Pessoa, feriado: String?, onClick: () -> Unit, modi
     val turnos = voce.turnosNoDia(diaHoje)
     val turno = turnos.firstOrNull()
     val tinta = corConteudo(status)
-    val agora = voce.situacaoAgora().second.substringAfter("· ").capitalizar()
-    val proximo = when (status) {
-        StatusDia.FERIAS -> voce.feriasFim?.let { "Até ${diaResumido(it)}" }
-        StatusDia.FOLGA -> voce.proximoDia(diaHoje + 1, livre = false)?.let { "Trabalho ${rotuloRelativo(it).lowercase()}" }
-        StatusDia.TRABALHO -> voce.proximoDia(diaHoje + 1, livre = true)?.let { "Folga ${rotuloRelativo(it).lowercase()}" }
-    }
+    val agora = voce.agoraCurto()
+    val proximo = voce.proximoEstado(diaHoje)
 
     Cartao(modifier = modifier.fillMaxWidth(), cor = corFundo(status), elevado = false, onClick = onClick) {
         Column(Modifier.padding(Espaco.xl), verticalArrangement = Arrangement.spacedBy(Espaco.md)) {

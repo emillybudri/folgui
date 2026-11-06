@@ -228,11 +228,16 @@ class FolguiRepository(context: Context) {
         return lista
     }
 
-    fun listarEventos(): List<Evento> {
+    fun listarEventos(): List<Evento> = lerEventos("SELECT * FROM evento ORDER BY time_millis ASC")
+
+    /** Só os eventos a partir do [momento], para não carregar o histórico sem precisar. */
+    fun listarEventosDesde(momento: Long): List<Evento> = lerEventos(
+        "SELECT * FROM evento WHERE time_millis >= ? ORDER BY time_millis ASC", momento.toString()
+    )
+
+    private fun lerEventos(consulta: String, vararg argumentos: String): List<Evento> {
         val lista = mutableListOf<Evento>()
-        helper.readableDatabase.rawQuery(
-            "SELECT * FROM evento ORDER BY time_millis ASC", null
-        ).use { c ->
+        helper.readableDatabase.rawQuery(consulta, argumentos).use { c ->
             while (c.moveToNext()) {
                 val dia = textoParaDia(c.texto("data")) ?: continue
                 lista.add(

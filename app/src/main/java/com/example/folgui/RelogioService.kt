@@ -126,6 +126,7 @@ class RelogioService : WearableListenerService() {
             return RespostaRelogio(TipoRespostaRelogio.ERRO, "Não consegui salvar. Tente pelo celular.")
         }
         mudancasDoRelogio.value++
+        WidgetsFolgui.pedirAtualizacao(this)
         val convidados = convidarAmigos(marcados, repository.listarPessoas(), estado.perfil?.nome.orEmpty())
         return RespostaRelogio(
             TipoRespostaRelogio.MARCADO,

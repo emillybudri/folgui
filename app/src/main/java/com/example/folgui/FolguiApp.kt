@@ -5,9 +5,14 @@ import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -31,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -49,6 +55,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
@@ -66,25 +73,39 @@ enum class Carga { CARREGANDO, OK, ERRO }
  * 5. sono, eventos e pessoas, 6. assistente com IA, 7. telas.
  */
 @Composable
-fun FolguiApp(eventoInicial: Int = 0) {
+fun FolguiApp(rotaPedida: StateFlow<String?>, onRotaAberta: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val estadoFlow = remember { context.dataStore.data.map(::lerEstado) }
     val estado by estadoFlow.collectAsState(initial = null)
 
-    // Abertura animada por um instante (não aparece quando o app é aberto pela notificação)
-    var abertura by rememberSaveable { mutableStateOf(eventoInicial == 0) }
+    // Abertura animada por um instante (não aparece quando o app é aberto pela notificação ou pelo widget)
+    var abertura by rememberSaveable { mutableStateOf(rotaPedida.value == null) }
     LaunchedEffect(Unit) {
         delay(1400)
         abertura = false
     }
-    val carregado = estado
-    if (abertura || carregado == null) {
-        TelaAbertura()
-        return
+    AnimatedContent(
+        targetState = !abertura && estado != null,
+        transitionSpec = { fadeIn(tween(DURACAO_ABERTURA)) togetherWith fadeOut(tween(DURACAO_ABERTURA)) },
+        label = "abertura"
+    ) { pronto ->
+        val carregado = estado
+        if (pronto && carregado != null) {
+            ConteudoApp(carregado, rotaPedida, onRotaAberta)
+        } else {
+            TelaAbertura()
+        }
     }
+}
 
+private const val DURACAO_ABERTURA = 350
+private const val DURACAO_BARRAS = 250
+
+@Composable
+private fun ConteudoApp(carregado: EstadoPerfil, rotaPedida: StateFlow<String?>, onRotaAberta: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val repository = remember { FolguiRepository(context) }
@@ -556,8 +577,13 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (eventoInicial > 0 && perfil != null) navController.navigate(Rotas.evento(eventoInicial))
+    val rotaExterna by rotaPedida.collectAsState()
+    LaunchedEffect(rotaExterna) {
+        val rota = rotaExterna ?: return@LaunchedEffect
+        onRotaAberta()
+        // Sem escala ou sem login, a pessoa continua no passo em que está
+        if (perfil == null || (nuvem.configurada && conta == null)) return@LaunchedEffect
+        if (rotaTemAbas(rota)) navController.irParaAba(rota) else navController.navigate(rota)
     }
 
     // Grupos: a cor é do grupo, então toda mudança aqui repinta os eventos dele na agenda
@@ -970,6 +996,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
     val entrada by navController.currentBackStackEntryAsState()
     val rotaAtual = entrada?.destination?.route
     val mostrarAbas = rotaTemAbas(rotaAtual)
+    // Enquanto a barra sai, a aba de onde a pessoa veio continua marcada
+    var ultimaAba by remember { mutableStateOf(Rotas.INICIO) }
+    if (mostrarAbas && rotaAtual != null) ultimaAba = rotaAtual
 
     // Quem mexe no Google Calendar volta para cá sem trocar de tela: a volta também conta
     var voltasAoApp by remember { mutableIntStateOf(0) }
@@ -1080,7 +1109,11 @@ fun FolguiApp(eventoInicial: Int = 0) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (mostrarAbas) {
+            AnimatedVisibility(
+                visible = mostrarAbas,
+                enter = expandVertically(tween(DURACAO_BARRAS), expandFrom = Alignment.Top) + fadeIn(tween(DURACAO_BARRAS)),
+                exit = shrinkVertically(tween(DURACAO_BARRAS), shrinkTowards = Alignment.Top) + fadeOut(tween(DURACAO_BARRAS))
+            ) {
                 BarraAssistente(
                     nome = voce.nome,
                     onAbrir = { navController.navigate(Rotas.assistente()) },
@@ -1090,9 +1123,13 @@ fun FolguiApp(eventoInicial: Int = 0) {
             }
         },
         bottomBar = {
-            if (mostrarAbas) {
+            AnimatedVisibility(
+                visible = mostrarAbas,
+                enter = expandVertically(tween(DURACAO_BARRAS), expandFrom = Alignment.Bottom) + fadeIn(tween(DURACAO_BARRAS)),
+                exit = shrinkVertically(tween(DURACAO_BARRAS), shrinkTowards = Alignment.Bottom) + fadeOut(tween(DURACAO_BARRAS))
+            ) {
                 BarraAbas(
-                    rotaAtual = rotaAtual,
+                    rotaAtual = ultimaAba,
                     onIr = { navController.irParaAba(it) },
                     onCriar = { navController.navigate(Rotas.novoEvento()) }
                 )
@@ -1106,10 +1143,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
                 .background(MaterialTheme.colorScheme.background),
-            enterTransition = { fadeIn(tween(220)) },
-            exitTransition = { fadeOut(tween(180)) },
-            popEnterTransition = { fadeIn(tween(220)) },
-            popExitTransition = { fadeOut(tween(180)) }
+            enterTransition = { entradaDaTela(voltando = false) },
+            exitTransition = { saidaDaTela(voltando = false) },
+            popEnterTransition = { entradaDaTela(voltando = true) },
+            popExitTransition = { saidaDaTela(voltando = true) }
         ) {
             composable(Rotas.BOAS_VINDAS) {
                 TelaBoasVindas(

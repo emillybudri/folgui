@@ -58,6 +58,16 @@ Antes de criar, o app mostra uma prévia. Nela dá para editar ou tirar cada ite
 - **Conta (Google ou e-mail):** o login vem antes do cadastro e guarda escala, atividades, pessoas, eventos e grupos na conta. Tudo volta ao entrar em outro celular.
 - **Apresentação e modo fácil:** quem abre o app pela primeira vez vê um passo a passo, que pode ser revisto no perfil. O modo fácil aumenta os textos do app inteiro.
 
+### Widgets
+
+Três widgets para a tela inicial, redimensionáveis e nos temas claro e escuro:
+
+- **Hoje:** trabalho, folga ou férias, a situação de agora e, com mais espaço, o que vem depois e o próximo compromisso.
+- **Semana:** os próximos 7 dias em círculos com a cor do dia. Tocar em um dia abre esse dia.
+- **Compromissos:** o que vem a seguir, do Folgui e da Google Agenda, com o botão de novo evento.
+
+Eles quase não gastam bateria nem memória: não usam internet, nem biblioteca, nem serviço em segundo plano, e não têm atualização periódica. O app só roda ao sair dele, quando o relógio marca um evento e no momento em que o widget ficaria errado (virada do dia, início ou fim do turno, fim de um compromisso). Esse alarme nunca acorda o celular: com a tela apagada, ele espera. Por isso um evento mudado direto na Google Agenda só aparece no widget na próxima atualização. Quem sai da conta não vê mais nenhum dado pessoal na tela inicial.
+
 ## Como rodar
 
 1. Copie `.env.example` para `.env` e preencha a chave da [API do Gemini](https://aistudio.google.com/apikey).
@@ -75,7 +85,7 @@ O `GEMINI_MODEL` é o modelo principal. Se ele estiver lotado ou sem cota, o app
 
 | Parte | O que usa |
 | --- | --- |
-| App | Kotlin e Jetpack Compose, sem layouts XML, com Navigation Compose |
+| App | Kotlin e Jetpack Compose, com Navigation Compose. Só os widgets usam layouts XML, que é o que a tela inicial do Android aceita |
 | Dados no aparelho | DataStore e SQLite |
 | Conta e nuvem | Firebase Authentication e Firestore |
 | Agenda | Provedor de calendário do Android (`CalendarContract`), com a conta Google do aparelho |
@@ -90,12 +100,13 @@ Todos os arquivos ficam em `app/src/main/java/com/example/folgui`. Para quem est
 | Assunto | Arquivos |
 | --- | --- |
 | Início do app | `MainActivity.kt` abre o `FolguiApp.kt`, que guarda os dados da sessão e liga as telas às ações |
-| Navegação | `Navegacao.kt`: rotas e barra de abas |
+| Navegação | `Navegacao.kt`: rotas e barra de abas. `Transicoes.kt`: o movimento entre as telas |
 | Regras da escala | `Escala.kt` e `Datas.kt`: não dependem de tela e têm testes |
 | Dados no aparelho | `Preferencias.kt` (DataStore), `BancoHelper.kt` e `FolguiRepository.kt` (SQLite) |
 | Serviços externos | `ApiRepository.kt` (REST), `AgendaRepository.kt`, `NuvemRepository.kt`, `AmigosRepository.kt` e `AssistenteIA.kt` |
 | Grupos e listas | `Grupos.kt` (cores e conciliação), `Lote.kt` (plano da lista, sem tela) e `ServicoAgenda.kt` (app e agenda sempre juntos) |
 | Lembretes | `AlarmScheduler.kt`, `ReminderReceiver.kt`, `NotificationHelper.kt` e `BootReceiver.kt` |
+| Widgets | `WidgetDados.kt` (regras, sem tela) e `Widgets.kt` (desenho e atualização) |
 | Telas | Arquivos `Telas*.kt` e `EtapasEscala.kt` |
 | Aparência | `Tema.kt` e `Componentes.kt` |
 
@@ -141,7 +152,7 @@ Cada cor tem um só significado, e as telas usam ícones e rótulos curtos. As r
 
 | Requisito | Onde está |
 | --- | --- |
-| Kotlin e Jetpack Compose | Todo o app, sem layouts XML |
+| Kotlin e Jetpack Compose | Todo o app, sem layouts XML (exceto os widgets, feitos com `RemoteViews`) |
 | Navegação entre telas | `NavHost` e `NavController` em [FolguiApp.kt](app/src/main/java/com/example/folgui/FolguiApp.kt) |
 | DataStore | Perfil, escala e preferências em [FolguiApp.kt](app/src/main/java/com/example/folgui/FolguiApp.kt) |
 | SQLite | [BancoHelper.kt](app/src/main/java/com/example/folgui/BancoHelper.kt) e [FolguiRepository.kt](app/src/main/java/com/example/folgui/FolguiRepository.kt) |

@@ -446,7 +446,13 @@ data class Pessoa(
             return true to when (atual.tipo) {
                 TipoBloco.TRABALHO -> "Trabalhando agora · sai às ${horaCurta(atual.fim)}$amanha"
                 TipoBloco.DESCANSO -> "Descansando do plantão · até ${horaCurta(atual.fim)}$amanha"
-                TipoBloco.SONO -> "Hora de dormir · acorda às ${horaCurta(atual.fim)}$amanha"
+                TipoBloco.SONO -> {
+                    // Se o trabalho começa antes do fim do sono salvo, vale a hora de levantar para ele
+                    val entrada = blocos.filter { it.tipo == TipoBloco.TRABALHO && it.inicio in agora..atual.fim }
+                        .minOfOrNull { it.inicio }
+                    val acordar = entrada?.let { maxOf(agora, it - PREPARO_MIN) } ?: atual.fim
+                    "Hora de dormir · acorda às ${horaCurta(acordar)}$amanha"
+                }
             }
         }
         val proximo = blocos.filter { it.tipo == TipoBloco.TRABALHO && it.inicio > agora }.minByOrNull { it.inicio }

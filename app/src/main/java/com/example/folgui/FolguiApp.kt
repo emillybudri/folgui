@@ -735,6 +735,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     modo = ModoEscala.CONFIGURACAO,
                     inicial = null,
                     cidadeInicial = "",
+                    nomeConta = conta?.nome.orEmpty(),
                     onVoltar = { navController.navigateUp() },
                     onSalvar = { pessoa, cidade ->
                         salvarPerfil(pessoa, cidade) {

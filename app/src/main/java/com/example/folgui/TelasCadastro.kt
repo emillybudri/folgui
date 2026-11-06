@@ -82,7 +82,9 @@ fun TelaFormularioEscala(
     /** Aparece embaixo do nome, na primeira etapa. */
     extraInicio: (@Composable () -> Unit)? = null,
     /** Só no modo [ModoEscala.ATIVIDADE]: emprego ou faculdade. */
-    tipoAtividade: TipoAtividade? = null
+    tipoAtividade: TipoAtividade? = null,
+    /** Nome que veio do login com Google: com ele, o cadastro não pergunta o nome. */
+    nomeConta: String = ""
 ) {
     val context = LocalContext.current
     val ehUsuario = modo == ModoEscala.CONFIGURACAO || modo == ModoEscala.PERFIL
@@ -95,10 +97,11 @@ fun TelaFormularioEscala(
     fun codificar(padrao: List<Turno?>): String =
         padrao.joinToString("") { t -> if (t == null) "F" else if (t == turnoAInicial) "A" else "B" }
 
-    var etapa by rememberSaveable { mutableIntStateOf(0) }
-    var etapaMaxima by rememberSaveable { mutableIntStateOf(if (editando) ETAPAS.lastIndex else 0) }
+    val etapaInicial = if (modo == ModoEscala.CONFIGURACAO && nomeConta.isNotBlank()) 1 else 0
+    var etapa by rememberSaveable { mutableIntStateOf(etapaInicial) }
+    var etapaMaxima by rememberSaveable { mutableIntStateOf(if (editando) ETAPAS.lastIndex else etapaInicial) }
 
-    var nome by rememberSaveable { mutableStateOf(inicial?.nome ?: "") }
+    var nome by rememberSaveable { mutableStateOf(inicial?.nome ?: nomeConta.take(40)) }
     // Outras atividades: ficam aqui até salvar, porque no primeiro cadastro ainda não há perfil
     var atividadesTexto by rememberSaveable { mutableStateOf(atividadesParaTexto(inicial?.atividades.orEmpty())) }
     val atividades = textoParaAtividades(atividadesTexto)
@@ -241,10 +244,10 @@ fun TelaFormularioEscala(
     }
 
     fun voltar() {
-        if (etapa == 0) onVoltar() else irPara(etapa - 1)
+        if (etapa == etapaInicial) onVoltar() else irPara(etapa - 1)
     }
 
-    BackHandler(enabled = etapa > 0 || modo == ModoEscala.ATIVIDADE) { voltar() }
+    BackHandler(enabled = etapa > etapaInicial || modo == ModoEscala.ATIVIDADE) { voltar() }
 
     fun escolherEscala(nova: TipoEscala) {
         // Lê a escala na hora do toque: guardar o valor de fora faria a função comparar com uma escala antiga

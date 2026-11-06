@@ -21,7 +21,7 @@ import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class ContaNuvem(val uid: String, val email: String)
+data class ContaNuvem(val uid: String, val email: String, val nome: String = "")
 
 /** O que está guardado na conta, com o momento em que foi enviado. */
 data class CopiaNuvem(val dados: String, val atualizadoEm: Long)
@@ -219,7 +219,7 @@ class NuvemRepository {
     val configurada: Boolean = BuildConfig.GOOGLE_WEB_CLIENT.isNotEmpty()
 
     val contaAtual: ContaNuvem?
-        get() = if (configurada) FirebaseAuth.getInstance().currentUser?.let { ContaNuvem(it.uid, it.email.orEmpty()) } else null
+        get() = if (configurada) FirebaseAuth.getInstance().currentUser?.let(::contaDe) else null
 
     /** Abre a escolha de conta do Google. [context] precisa ser a Activity. */
     suspend fun entrar(context: Context): ContaNuvem {
@@ -245,7 +245,7 @@ class NuvemRepository {
 
     private fun contaDe(usuario: FirebaseUser?): ContaNuvem {
         val conta = usuario ?: error("Login sem usuário")
-        return ContaNuvem(conta.uid, conta.email.orEmpty())
+        return ContaNuvem(conta.uid, conta.email.orEmpty(), conta.displayName.orEmpty())
     }
 
     suspend fun sair(context: Context) {

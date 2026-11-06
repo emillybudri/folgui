@@ -714,6 +714,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
     var adicionandoAmigo by rememberSaveable { mutableStateOf(false) }
     var conectandoAmigo by remember { mutableStateOf(false) }
     var erroAmigo by remember { mutableStateOf<String?>(null) }
+    var amigosFalhou by remember { mutableStateOf(false) }
 
     suspend fun sincronizarAmigos() {
         if (conta == null || perfil == null) return
@@ -727,10 +728,12 @@ fun FolguiApp(eventoInicial: Int = 0) {
     LaunchedEffect(conta, rotaAtual, voce) {
         try {
             sincronizarAmigos()
+            amigosFalhou = false
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Sem internet: as escalas guardadas no aparelho continuam valendo
+            amigosFalhou = true
         }
     }
 
@@ -911,6 +914,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                             CartaoAmigos(
                                 temConta = conta != null,
                                 codigo = codigoAmigo,
+                                falhou = amigosFalhou,
                                 onEntrar = ::entrarComGoogle,
                                 onCompartilhar = { compartilharCodigo(context, it) },
                                 onAdicionar = {

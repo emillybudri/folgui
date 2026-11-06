@@ -40,6 +40,7 @@ fun compartilharCodigo(context: Context, codigo: String) {
 fun CartaoAmigos(
     temConta: Boolean,
     codigo: String?,
+    falhou: Boolean,
     onEntrar: () -> Unit,
     onCompartilhar: (String) -> Unit,
     onAdicionar: () -> Unit,
@@ -53,7 +54,10 @@ fun CartaoAmigos(
                     Text("Entre na sua conta para ver a escala dos amigos sem digitar nada.", style = MaterialTheme.typography.bodyMedium)
                     Button(onClick = onEntrar, modifier = Modifier.fillMaxWidth()) { Text("Entrar com Google") }
                 }
-                codigo == null -> Text("Preparando seu código…", style = MaterialTheme.typography.bodyMedium)
+                codigo == null -> Text(
+                    if (falhou) "Não consegui carregar seu código. Veja a internet." else "Preparando seu código…",
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 else -> {
                     Text("Seu código", style = MaterialTheme.typography.labelMedium)
                     Text(codigoParaMostrar(codigo), style = MaterialTheme.typography.headlineSmall.numerico)

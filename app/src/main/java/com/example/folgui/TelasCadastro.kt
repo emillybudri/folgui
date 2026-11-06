@@ -247,9 +247,11 @@ fun TelaFormularioEscala(
     BackHandler(enabled = etapa > 0 || modo == ModoEscala.ATIVIDADE) { voltar() }
 
     fun escolherEscala(nova: TipoEscala) {
-        if (nova == escala) return
+        // Lê a escala na hora do toque: guardar o valor de fora faria a função comparar com uma escala antiga
+        val atual = TipoEscala.porCodigo(codigoEscala)
+        if (nova == atual) return
         // Se o horário ainda é o padrão da escala anterior, troca pelo padrão da nova
-        if (turnoA == escala.turnoPadrao) {
+        if (Turno(aInicio, aFim) == atual.turnoPadrao) {
             aInicio = nova.turnoPadrao.inicio
             aFim = nova.turnoPadrao.fim
         }

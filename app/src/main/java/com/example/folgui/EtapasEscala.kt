@@ -174,7 +174,7 @@ fun EtapaRotina(titulo: String, escala: TipoEscala, onEscolher: (TipoEscala) -> 
             titulo = "Plantão ou revezamento",
             texto = "12x36, 24x48, 2x2, 6x1...",
             selecionado = escala.revezamento,
-            onClick = { if (!escala.revezamento) onEscolher(TipoEscala.ESCALA_12X36) }
+            onClick = { onEscolher(TipoEscala.ESCALA_12X36) }
         )
         CartaoCategoria(
             icone = Icones.Editar,

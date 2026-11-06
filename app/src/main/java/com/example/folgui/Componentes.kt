@@ -3,7 +3,6 @@ package com.example.folgui
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -261,25 +260,6 @@ fun SeloStatus(status: StatusDia, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelMedium,
             color = corConteudo(status)
         )
-    }
-}
-
-/** Selo da situação do grupo: "Todos livres", "Parte livre", "Ninguém livre". */
-@Composable
-fun SeloSituacao(situacao: SituacaoGrupo, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .background(corFundo(situacao), CircleShape)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .background(corIndicador(situacao), CircleShape)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(situacao.rotulo, style = MaterialTheme.typography.labelMedium, color = corConteudo(situacao))
     }
 }
 

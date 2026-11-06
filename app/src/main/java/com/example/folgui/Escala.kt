@@ -783,13 +783,3 @@ fun resumoDisponibilidade(pessoas: List<Pessoa>, dia: Int, janela: Janela? = nul
         else -> false to "${ocupados[0]} e mais ${ocupados.size - 1} pessoas não estão livres$quando"
     }
 }
-
-/** "amanhã", "sábado, 7/11 (em 3 dias)". */
-fun descreverDia(dia: Int): String {
-    val p = partes(dia)
-    return when (val diferenca = dia - hoje()) {
-        0 -> "hoje"
-        1 -> "amanhã"
-        else -> "${nomeDiaSemana(dia)}, ${p.dia}/${p.mes}" + if (diferenca > 1) " (em $diferenca dias)" else ""
-    }
-}

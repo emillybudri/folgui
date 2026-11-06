@@ -289,6 +289,7 @@ private val INSTRUCOES = """
     {"tipo":"remover_mudanca","pessoa_id":-1,"dia":"..."} (volta à escala normal no dia)
     {"tipo":"turno","pessoa_id":-1,"entrada":"18:00","saida":"06:00"} (novo horário fixo da escala)
     Troca de plantão = "folga" no dia antigo + "trabalho" no dia novo, com o horário da escala.
+    Só preencha "duracao_min" se a pessoa disser a duração ou a hora de terminar: o fim do evento é opcional.
     Use a lista de feriados para datas como "Natal". Datas sem ano são a próxima vez que acontecem a partir de hoje, nunca no passado.
     Só o que está na lista "Google Agenda" é somente leitura: para mudar esses, diga que é preciso abrir na Google Agenda. O que está na lista "Eventos do Folgui" você pode editar, remarcar e excluir.
 """.trimIndent()

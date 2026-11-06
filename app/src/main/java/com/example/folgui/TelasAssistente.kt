@@ -59,6 +59,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -76,11 +78,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
+/** Exemplos na tela vazia: o título aparece no cartão e o pedido vai para a IA. */
+private class SugestaoIA(val icone: ImageVector, val titulo: String, val pedido: String)
+
 private val SUGESTOES_IA = listOf(
-    "Próxima folga?",
-    "Marcar compromisso",
-    "Remarcar evento",
-    "Tirei férias"
+    SugestaoIA(Icones.DiaLivre, "Próxima folga", "Quando é a minha próxima folga?"),
+    SugestaoIA(Icones.Evento, "Marcar algo", "Quero marcar um compromisso"),
+    SugestaoIA(Icones.Pessoas, "Ver amigos", "Quando eu e meus amigos estamos livres?"),
+    SugestaoIA(Icones.Sincronizar, "Trocar plantão", "Preciso trocar um plantão")
 )
 
 private val ALTURA_BARRA = 52.dp
@@ -217,9 +222,9 @@ fun TelaAssistente(
         corrigindo = false
     }
 
-    // Aberta pelo microfone da barra, já começa ouvindo; pelo campo, já abre o teclado
+    // Aberta pelo microfone da barra, já começa ouvindo
     LaunchedEffect(Unit) {
-        if (iniciarGravando) tocarMicrofone() else if (mensagens.isEmpty()) foco.requestFocus()
+        if (iniciarGravando) tocarMicrofone()
     }
     LaunchedEffect(gravando) {
         while (gravando) {
@@ -253,74 +258,7 @@ fun TelaAssistente(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onVoltar) { Icon(Icones.Voltar, contentDescription = "Voltar") }
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .heightIn(min = ALTURA_BARRA)
-                        .clip(RoundedCornerShape(ALTURA_BARRA / 2))
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .padding(start = Espaco.lg, end = Espaco.xs),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (gravando) {
-                        Box(
-                            Modifier
-                                .size(10.dp)
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                        )
-                        Spacer(Modifier.width(Espaco.md))
-                        Text(
-                            "Ouvindo… ${tempoAudio(segundos)}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = {
-                            gravando = false
-                            gravador.cancelar()
-                        }) { Icon(Icones.Fechar, contentDescription = "Cancelar áudio") }
-                        FilledIconButton(onClick = ::terminarGravacao) {
-                            Icon(Icones.Enviar, contentDescription = "Enviar áudio")
-                        }
-                    } else {
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .padding(vertical = Espaco.sm)
-                        ) {
-                            if (texto.isEmpty()) {
-                                Text(
-                                    if (corrigindo) "O que corrijo?" else "Pergunte à IA",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            BasicTextField(
-                                value = texto,
-                                onValueChange = { texto = it.take(400) },
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                maxLines = 4,
-                                keyboardOptions = KeyboardOptions(
-                                    capitalization = KeyboardCapitalization.Sentences,
-                                    imeAction = ImeAction.Send
-                                ),
-                                keyboardActions = KeyboardActions(onSend = { enviar(texto) }),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(foco)
-                            )
-                        }
-                        if (texto.isBlank()) {
-                            IconButton(onClick = ::tocarMicrofone, enabled = !pensando) {
-                                Icon(Icones.Microfone, contentDescription = "Enviar áudio")
-                            }
-                        } else {
-                            FilledIconButton(onClick = { enviar(texto) }, enabled = !pensando) {
-                                Icon(Icones.Enviar, contentDescription = "Enviar")
-                            }
-                        }
-                    }
-                }
+                Text("Assistente", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 if (mensagens.isNotEmpty() && !pensando && !gravando) {
                     IconButton(onClick = onLimpar) {
                         Icon(Icones.Adicionar, contentDescription = "Nova conversa")
@@ -337,34 +275,35 @@ fun TelaAssistente(
                 verticalArrangement = Arrangement.spacedBy(Espaco.md),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                item(key = "boas_vindas") {
-                    if (mensagens.isEmpty()) {
+                if (mensagens.isEmpty()) {
+                    item(key = "boas_vindas") {
                         Column(
-                            Modifier.limitarLargura(),
+                            Modifier
+                                .limitarLargura()
+                                .fillParentMaxHeight(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(Espaco.sm)
+                            verticalArrangement = Arrangement.spacedBy(Espaco.md, Alignment.CenterVertically)
                         ) {
                             Image(
                                 painter = painterResource(R.drawable.ilustracao_assistente),
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .height(120.dp)
+                                    .height(170.dp)
                                     .aspectRatio(1.5f)
                             )
-                            Text("Como posso ajudar?", style = MaterialTheme.typography.titleLarge)
+                            Text("Como posso ajudar?", style = MaterialTheme.typography.headlineSmall)
                             Text(
-                                "Escreva ou fale",
+                                "Fale do seu jeito. Nada é marcado sem você confirmar.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(Modifier.height(Espaco.sm))
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(Espaco.sm, Alignment.CenterHorizontally),
-                                verticalArrangement = Arrangement.spacedBy(Espaco.xs)
-                            ) {
-                                SUGESTOES_IA.forEach { s ->
-                                    SuggestionChip(onClick = { enviar(s) }, label = { Text(s) })
+                            SUGESTOES_IA.chunked(2).forEach { linha ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(Espaco.md)) {
+                                    linha.forEach { s ->
+                                        CartaoSugestao(s, { enviar(s.pedido) }, Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -408,6 +347,108 @@ fun TelaAssistente(
                     }
                 }
             }
+
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = Espaco.lg, vertical = Espaco.sm),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(Modifier.limitarLargura()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = ALTURA_BARRA)
+                            .clip(RoundedCornerShape(ALTURA_BARRA / 2))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .padding(start = Espaco.lg, end = Espaco.xs),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (gravando) {
+                            Box(
+                                Modifier
+                                    .size(10.dp)
+                                    .background(MaterialTheme.colorScheme.error, CircleShape)
+                            )
+                            Spacer(Modifier.width(Espaco.md))
+                            Text(
+                                "Ouvindo… ${tempoAudio(segundos)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = {
+                                gravando = false
+                                gravador.cancelar()
+                            }) { Icon(Icones.Fechar, contentDescription = "Cancelar áudio") }
+                            FilledIconButton(onClick = ::terminarGravacao) {
+                                Icon(Icones.Enviar, contentDescription = "Enviar áudio")
+                            }
+                        } else {
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .padding(vertical = Espaco.sm)
+                            ) {
+                                if (texto.isEmpty()) {
+                                    Text(
+                                        if (corrigindo) "O que corrijo?" else "Escreva ou toque no microfone",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                BasicTextField(
+                                    value = texto,
+                                    onValueChange = { texto = it.take(400) },
+                                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                    maxLines = 4,
+                                    keyboardOptions = KeyboardOptions(
+                                        capitalization = KeyboardCapitalization.Sentences,
+                                        imeAction = ImeAction.Send
+                                    ),
+                                    keyboardActions = KeyboardActions(onSend = { enviar(texto) }),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(foco)
+                                )
+                            }
+                            if (texto.isBlank()) {
+                                IconButton(onClick = ::tocarMicrofone, enabled = !pensando) {
+                                    Icon(Icones.Microfone, contentDescription = "Enviar áudio")
+                                }
+                            } else {
+                                FilledIconButton(onClick = { enviar(texto) }, enabled = !pensando) {
+                                    Icon(Icones.Enviar, contentDescription = "Enviar")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartaoSugestao(sugestao: SugestaoIA, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Cartao(modifier, onClick = onClick) {
+        Row(Modifier.padding(Espaco.md), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    sugestao.icone,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(Espaco.sm))
+            Text(sugestao.titulo, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

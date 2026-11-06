@@ -43,18 +43,20 @@ object Rotas {
     const val PERFIL = "perfil"
     const val PESSOA = "pessoa/{id}"
     const val DIA = "dia/{dia}"
-    const val FORM_EVENTO = "evento/{id}?dia={dia}&hora={hora}&quem={quem}"
+    const val FORM_EVENTO = "evento/{id}?dia={dia}&hora={hora}&quem={quem}&grupo={grupo}"
     const val EVENTO = "detalhe_evento/{id}"
     const val QUANDO_DA = "quando_da"
     const val ASSISTENTE = "assistente?audio={audio}"
+    const val GRUPO = "grupo/{id}"
 
     fun pessoa(id: Int) = "pessoa/$id"
     fun dia(dia: Int) = "dia/$dia"
-    fun novoEvento(dia: Int? = null, hora: Int = -1, quem: Set<Int>? = null) =
-        "evento/0?dia=${dia ?: -1}&hora=$hora&quem=${participantesParaTexto(quem)}"
+    fun novoEvento(dia: Int? = null, hora: Int = -1, quem: Set<Int>? = null, grupo: Int = 0) =
+        "evento/0?dia=${dia ?: -1}&hora=$hora&quem=${participantesParaTexto(quem)}&grupo=$grupo"
     fun editarEvento(id: Int) = "evento/$id"
     fun evento(id: Int) = "detalhe_evento/$id"
     fun assistente(audio: Boolean = false) = "assistente?audio=$audio"
+    fun grupo(id: Int) = "grupo/$id"
 }
 
 private data class Aba(val rota: String, val rotulo: String, val icone: ImageVector)

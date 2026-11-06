@@ -45,12 +45,31 @@ class BancoHelper(context: Context) : SQLiteOpenHelper(
                 duracao_min INTEGER NOT NULL DEFAULT 120,
                 participantes TEXT NOT NULL DEFAULT '*',
                 time_millis INTEGER NOT NULL,
-                agenda_id INTEGER NOT NULL DEFAULT 0
+                agenda_id INTEGER NOT NULL DEFAULT 0,
+                grupo_id INTEGER NOT NULL DEFAULT 0,
+                avisos_extras TEXT NOT NULL DEFAULT '',
+                detalhes TEXT NOT NULL DEFAULT '',
+                aviso_na_agenda INTEGER NOT NULL DEFAULT 0,
+                fora_da_agenda INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
 
         criarTabelaExcecao(db)
+        criarTabelaGrupo(db)
+    }
+
+    // Grupos de compromissos. A cor é o colorId da Google Agenda (ver CorGrupo)
+    private fun criarTabelaGrupo(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE grupo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                cor INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
     }
 
     // Mudanças pontuais na escala: trocas de plantão, folgas e trabalhos extras (pessoa -1 = você)
@@ -113,10 +132,19 @@ class BancoHelper(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 7) {
             db.execSQL("ALTER TABLE pessoa ADD COLUMN amigo_uid TEXT NOT NULL DEFAULT ''")
         }
+        // Versão 8: grupos, vários lembretes por evento e situação do evento na Google Agenda
+        if (oldVersion < 8) {
+            criarTabelaGrupo(db)
+            db.execSQL("ALTER TABLE evento ADD COLUMN grupo_id INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE evento ADD COLUMN avisos_extras TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE evento ADD COLUMN detalhes TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE evento ADD COLUMN aviso_na_agenda INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE evento ADD COLUMN fora_da_agenda INTEGER NOT NULL DEFAULT 0")
+        }
     }
 
     companion object {
         private const val DATABASE_NAME = "folgui.db"
-        private const val DATABASE_VERSION = 7
+        private const val DATABASE_VERSION = 8
     }
 }

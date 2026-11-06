@@ -31,7 +31,8 @@ data class DadosNuvem(
     val perfil: Perfil,
     val excecoesVoce: Map<Int, Excecao>,
     val pessoas: List<Pessoa>,
-    val eventos: List<Evento>
+    val eventos: List<Evento>,
+    val grupos: List<Grupo> = emptyList()
 )
 
 // ---------- Conversão para texto (o id da Google Agenda fica de fora: ele só vale em cada aparelho) ----------
@@ -140,7 +141,15 @@ fun dadosParaTexto(dados: DadosNuvem): String {
                     .put("antecedencia", e.antecedenciaMin)
                     .put("duracao", e.duracaoMin)
                     .put("participantes", participantesParaTexto(e.participantes))
+                    .put("grupo", e.grupoId)
+                    .put("avisosExtras", e.avisosExtras.joinToString(","))
+                    .put("detalhes", e.detalhes)
             )
+        }
+    }
+    val grupos = JSONArray().apply {
+        dados.grupos.forEach { g ->
+            put(JSONObject().put("id", g.id).put("nome", g.nome).put("cor", g.cor.id))
         }
     }
     return JSONObject()
@@ -148,6 +157,7 @@ fun dadosParaTexto(dados: DadosNuvem): String {
         .put("excecoesVoce", excecoesParaJson(dados.excecoesVoce))
         .put("pessoas", pessoas)
         .put("eventos", eventos)
+        .put("grupos", grupos)
         .toString()
 }
 
@@ -197,10 +207,19 @@ fun textoParaDados(texto: String): DadosNuvem? = try {
             local = o.getString("local"),
             antecedenciaMin = o.getInt("antecedencia"),
             duracaoMin = o.getInt("duracao"),
-            participantes = textoParaParticipantes(o.getString("participantes"))
+            participantes = textoParaParticipantes(o.getString("participantes")),
+            // Cópias antigas não têm estes campos
+            grupoId = o.optInt("grupo"),
+            avisosExtras = o.optString("avisosExtras").split(",").mapNotNull { it.toIntOrNull() },
+            detalhes = o.optString("detalhes")
         )
     }
-    DadosNuvem(perfil, jsonParaExcecoes(raiz.getJSONArray("excecoesVoce")), pessoas, eventos)
+    val listaGrupos = raiz.optJSONArray("grupos") ?: JSONArray()
+    val grupos = (0 until listaGrupos.length()).mapNotNull { i ->
+        val o = listaGrupos.getJSONObject(i)
+        CorGrupo.porId(o.getInt("cor"))?.let { Grupo(o.getInt("id"), o.getString("nome"), it) }
+    }
+    DadosNuvem(perfil, jsonParaExcecoes(raiz.getJSONArray("excecoesVoce")), pessoas, eventos, grupos)
 } catch (e: Exception) {
     null
 }

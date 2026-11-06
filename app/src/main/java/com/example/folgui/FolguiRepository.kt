@@ -130,6 +130,9 @@ class FolguiRepository(context: Context) {
         put("duracao_min", evento.duracaoMin)
         put("participantes", participantesParaTexto(evento.participantes))
         put("time_millis", evento.momento)
+        put("grupo_id", evento.grupoId)
+        put("avisos_extras", evento.avisosExtras.joinToString(","))
+        put("detalhes", evento.detalhes)
     }
 
     /** Retorna o id gerado (ou -1 em caso de falha). Com [manterId], reaproveita o id. */
@@ -158,6 +161,73 @@ class FolguiRepository(context: Context) {
         )
     }
 
+    /** Quem avisa do evento: a agenda (true) ou o alarme do Folgui. */
+    fun marcarAvisoNaAgenda(id: Int, naAgenda: Boolean) {
+        helper.writableDatabase.update(
+            "evento", ContentValues().apply { put("aviso_na_agenda", if (naAgenda) 1 else 0) }, "id = ?", arrayOf(id.toString())
+        )
+    }
+
+    fun marcarForaDaAgenda(id: Int, fora: Boolean) {
+        helper.writableDatabase.update(
+            "evento", ContentValues().apply { put("fora_da_agenda", if (fora) 1 else 0) }, "id = ?", arrayOf(id.toString())
+        )
+    }
+
+    /** Muda o grupo de vários eventos de uma vez: ou todos mudam, ou nenhum. */
+    fun moverParaGrupo(ids: Collection<Int>, grupoId: Int) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            ids.forEach { id ->
+                db.update("evento", ContentValues().apply { put("grupo_id", grupoId) }, "id = ?", arrayOf(id.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    // ---------- Grupos ----------
+
+    private fun valoresGrupo(grupo: Grupo) = ContentValues().apply {
+        put("nome", grupo.nome)
+        put("cor", grupo.cor.id)
+    }
+
+    /** Retorna o id gerado (ou -1). Com [manterId], reaproveita o id (usado no "Desfazer"). */
+    fun inserirGrupo(grupo: Grupo, manterId: Boolean = false): Int {
+        val valores = valoresGrupo(grupo).apply { if (manterId) put("id", grupo.id) }
+        return helper.writableDatabase.insert("grupo", null, valores).toInt()
+    }
+
+    fun atualizarGrupo(grupo: Grupo): Boolean =
+        helper.writableDatabase.update("grupo", valoresGrupo(grupo), "id = ?", arrayOf(grupo.id.toString())) > 0
+
+    /** Exclui o grupo. Os eventos continuam, agora sem grupo. */
+    fun excluirGrupo(id: Int) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.update("evento", ContentValues().apply { put("grupo_id", 0) }, "grupo_id = ?", arrayOf(id.toString()))
+            db.delete("grupo", "id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun listarGrupos(): List<Grupo> {
+        val lista = mutableListOf<Grupo>()
+        helper.readableDatabase.rawQuery("SELECT * FROM grupo ORDER BY nome COLLATE NOCASE ASC", null).use { c ->
+            while (c.moveToNext()) {
+                val cor = CorGrupo.porId(c.getInt(c.getColumnIndexOrThrow("cor"))) ?: continue
+                lista.add(Grupo(c.getInt(c.getColumnIndexOrThrow("id")), c.texto("nome"), cor))
+            }
+        }
+        return lista
+    }
+
     fun listarEventos(): List<Evento> {
         val lista = mutableListOf<Evento>()
         helper.readableDatabase.rawQuery(
@@ -175,7 +245,12 @@ class FolguiRepository(context: Context) {
                         antecedenciaMin = c.getInt(c.getColumnIndexOrThrow("antecedencia_min")),
                         duracaoMin = c.getInt(c.getColumnIndexOrThrow("duracao_min")),
                         participantes = textoParaParticipantes(c.texto("participantes")),
-                        agendaId = c.getLong(c.getColumnIndexOrThrow("agenda_id"))
+                        agendaId = c.getLong(c.getColumnIndexOrThrow("agenda_id")),
+                        grupoId = c.getInt(c.getColumnIndexOrThrow("grupo_id")),
+                        avisosExtras = c.texto("avisos_extras").split(",").mapNotNull { it.toIntOrNull() },
+                        detalhes = c.texto("detalhes"),
+                        avisoNaAgenda = c.getInt(c.getColumnIndexOrThrow("aviso_na_agenda")) == 1,
+                        foraDaAgenda = c.getInt(c.getColumnIndexOrThrow("fora_da_agenda")) == 1
                     )
                 )
             }
@@ -184,16 +259,22 @@ class FolguiRepository(context: Context) {
     }
 
     /** Troca tudo pelo que veio da conta. Em transação: se algo falhar, nada se perde. */
-    fun substituirTudo(pessoas: List<Pessoa>, excecoesVoce: Map<Int, Excecao>, eventos: List<Evento>) {
+    fun substituirTudo(
+        pessoas: List<Pessoa>,
+        excecoesVoce: Map<Int, Excecao>,
+        eventos: List<Evento>,
+        grupos: List<Grupo> = emptyList()
+    ) {
         val db = helper.writableDatabase
         db.beginTransaction()
         try {
-            listOf("excecao", "pessoa", "evento").forEach { db.delete(it, null, null) }
+            listOf("excecao", "pessoa", "evento", "grupo").forEach { db.delete(it, null, null) }
             pessoas.forEach { p ->
                 inserirPessoa(p, manterId = true)
                 p.excecoes.values.forEach { salvarExcecao(p.id, it) }
             }
             excecoesVoce.values.forEach { salvarExcecao(Pessoa.ID_VOCE, it) }
+            grupos.forEach { inserirGrupo(it, manterId = true) }
             eventos.forEach { inserirEvento(it, manterId = true) }
             db.setTransactionSuccessful()
         } finally {

@@ -61,7 +61,12 @@ class RelogioService : WearableListenerService() {
         val assistente = AssistenteIA(BuildConfig.GEMINI_API_KEY, BuildConfig.GEMINI_MODEL)
         val contexto = contextoParaIA(todas, eventos, agenda, emptyMap())
         val historico = conversa.historico(System.currentTimeMillis())
-        val resposta = assistente.conversar(contexto, historico, todas, eventos, pedido).mensagem
+        val respostaIA = assistente.conversar(contexto, historico, todas, eventos, pedido)
+        // Revisar uma lista inteira não cabe na tela do relógio
+        if (respostaIA.ajuste != null) {
+            return RespostaRelogio(TipoRespostaRelogio.ERRO, "Vários compromissos de uma vez, só pelo celular.")
+        }
+        val resposta = respostaIA.mensagem
 
         // Mesma conferência do assistente do celular: conflito com trabalho, sono, data que já passou
         val (validas, avisos) = verificarAcoes(resposta.acoes, todas, eventos)
@@ -108,7 +113,12 @@ class RelogioService : WearableListenerService() {
             AlarmScheduler.schedule(this, criado)
             // Aqui não dá para pedir permissão: sem ela, o evento fica só no Folgui
             if (!estado.agendaDesligada && agenda.temEscrita()) {
-                agenda.gravar(criado, 0)?.let { repository.salvarAgendaId(id, it) }
+                val gravado = agenda.salvar(criado, 0)
+                gravado.id?.let { repository.salvarAgendaId(id, it) }
+                if (gravado.avisosGravados) {
+                    repository.marcarAvisoNaAgenda(id, true)
+                    AlarmScheduler.cancel(this, id)
+                }
             }
             criado
         }

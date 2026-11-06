@@ -88,6 +88,9 @@ private val SUGESTOES_IA = listOf(
     SugestaoIA(Icones.Sincronizar, "Trocar plantão", "Preciso trocar um plantão")
 )
 
+/** Cabe uma lista grande de compromissos colada de uma vez. */
+private const val TAMANHO_PEDIDO = 4000
+
 private val ALTURA_BARRA = 52.dp
 
 private fun tempoAudio(segundos: Int) = "${segundos / 60}:${"%02d".format(segundos % 60)}"
@@ -162,6 +165,15 @@ fun TelaAssistente(
     mensagens: List<MensagemIA>,
     pensando: Boolean,
     iniciarGravando: Boolean,
+    grupos: List<Grupo> = emptyList(),
+    plano: PlanoLote? = null,
+    analises: Map<Int, AnaliseItem> = emptyMap(),
+    criandoPlano: Boolean = false,
+    agendaLiberada: Boolean = true,
+    agendaGoogle: Boolean = true,
+    onMudarPlano: (PlanoLote?) -> Unit = {},
+    onCriarPlano: (Boolean) -> Unit = {},
+    onConectarAgenda: () -> Unit = {},
     snackbar: SnackbarHostState,
     onVoltar: () -> Unit,
     onEnviar: (String) -> Unit,
@@ -237,7 +249,9 @@ fun TelaAssistente(
 
     LaunchedEffect(mensagens.size, pensando) {
         val total = mensagens.size + if (pensando) 1 else 0
-        if (total > 0) lista.animateScrollToItem(total)
+        // Com a prévia aberta, a última fala fica à vista logo acima dela
+        val destino = if (plano != null && !pensando) mensagens.size - 1 else total
+        if (total > 0) lista.animateScrollToItem(destino.coerceAtLeast(0))
     }
 
     Scaffold(
@@ -330,6 +344,23 @@ fun TelaAssistente(
                     }
                 }
 
+                if (plano != null) {
+                    item(key = "plano") {
+                        CartaoPlano(
+                            plano = plano,
+                            analises = analises,
+                            grupos = grupos,
+                            criando = criandoPlano,
+                            agendaLiberada = agendaLiberada,
+                            agendaGoogle = agendaGoogle,
+                            onMudar = onMudarPlano,
+                            onCriar = onCriarPlano,
+                            onConectar = onConectarAgenda,
+                            modifier = Modifier.limitarLargura()
+                        )
+                    }
+                }
+
                 if (pensando) {
                     item(key = "pensando") {
                         Row(
@@ -399,10 +430,10 @@ fun TelaAssistente(
                                 }
                                 BasicTextField(
                                     value = texto,
-                                    onValueChange = { texto = it.take(400) },
+                                    onValueChange = { texto = it.take(TAMANHO_PEDIDO) },
                                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                    maxLines = 4,
+                                    maxLines = 6,
                                     keyboardOptions = KeyboardOptions(
                                         capitalization = KeyboardCapitalization.Sentences,
                                         imeAction = ImeAction.Send
@@ -537,7 +568,9 @@ private fun BalaoIA(
                                     TipoAcaoIA.REMOVER_MUDANCA -> Icones.Sincronizar
                                     TipoAcaoIA.SONO -> Icones.Lua
                                     TipoAcaoIA.CRIAR_EVENTO, TipoAcaoIA.EDITAR_EVENTO -> Icones.Evento
-                                    TipoAcaoIA.EXCLUIR_EVENTO -> Icones.Excluir
+                                    TipoAcaoIA.EXCLUIR_EVENTO, TipoAcaoIA.EXCLUIR_GRUPO -> Icones.Excluir
+                                    TipoAcaoIA.CRIAR_GRUPO, TipoAcaoIA.EDITAR_GRUPO, TipoAcaoIA.MOVER_EVENTOS -> Icones.Grade
+                                    TipoAcaoIA.AVISOS_EVENTOS -> Icones.Sino
                                     else -> if (a.turno?.noturno == true) Icones.Lua else Icones.Trabalho
                                 },
                                 contentDescription = null,

@@ -34,6 +34,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         buildConfigField("String", "GEMINI_API_KEY", "\"${ambiente["GEMINI_API_KEY"].orEmpty()}\"")
         buildConfigField("String", "GEMINI_MODEL", "\"${ambiente["GEMINI_MODEL"] ?: "gemini-3-flash-preview"}\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT", "\"${clienteWebGoogle()}\"")
@@ -91,4 +93,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // org.json do Android não funciona fora do aparelho: os testes da IA usam esta implementação
     testImplementation("org.json:json:20240303")
+
+    // Testes no aparelho: agenda e banco de verdade
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

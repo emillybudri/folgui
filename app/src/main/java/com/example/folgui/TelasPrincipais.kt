@@ -464,10 +464,16 @@ fun SeloFeriado(nome: String) {
 }
 
 @Composable
-fun LinhaEvento(evento: Evento, todas: List<Pessoa>, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun LinhaEvento(
+    evento: Evento,
+    todas: List<Pessoa>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    grupo: Grupo? = null
+) {
     val quemVai = pessoasDoEvento(evento, todas)
     val (livres, resumo) = resumoDisponibilidade(quemVai, evento.dia, evento.janela)
-    val lembreteAtivo = evento.momentoLembrete?.let { it > System.currentTimeMillis() } == true
+    val lembreteAtivo = evento.proximosLembretes.isNotEmpty()
 
     Row(
         modifier = modifier
@@ -485,6 +491,14 @@ fun LinhaEvento(evento: Evento, todas: List<Pessoa>, onClick: () -> Unit, modifi
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (grupo != null) ResumoGrupo(grupo)
+            if (evento.foraDaAgenda) {
+                Text(
+                    "Apagado da Google Agenda",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = corAmbarConteudo()
+                )
+            }
             Text(
                 text = listOf(evento.faixaHorario, evento.local).filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
@@ -607,8 +621,11 @@ fun TelaEventos(
     todas: List<Pessoa>,
     agenda: Map<Int, List<CompromissoAgenda>>,
     agendaConectada: Boolean,
+    grupos: List<Grupo> = emptyList(),
     snackbar: SnackbarHostState,
     onAbrirEvento: (Int) -> Unit,
+    onAbrirGrupo: (Int) -> Unit = {},
+    onNovoGrupo: () -> Unit = {},
     onConectarAgenda: () -> Unit,
     onDesconectarAgenda: () -> Unit
 ) {
@@ -637,6 +654,9 @@ fun TelaEventos(
             verticalArrangement = Arrangement.spacedBy(Espaco.sm),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            item(key = "grupos") {
+                FaixaGrupos(grupos, eventos, onAbrirGrupo, onNovoGrupo, Modifier.limitarLargura())
+            }
             if (eventos.isEmpty()) {
                 item(key = "vazio") {
                     EstadoVazio(
@@ -651,7 +671,9 @@ fun TelaEventos(
             if (proximos.isNotEmpty()) {
                 item(key = "proximos") { TituloCurto("Próximos", Modifier.limitarLargura()) }
                 items(proximos, key = { it.id }) { evento ->
-                    Cartao(margem.animateItem()) { LinhaEvento(evento, todas, { onAbrirEvento(evento.id) }) }
+                    Cartao(margem.animateItem()) {
+                        LinhaEvento(evento, todas, { onAbrirEvento(evento.id) }, grupo = grupoDoEvento(evento, grupos))
+                    }
                 }
             }
             if (agendaConectada && compromissos.isNotEmpty()) {
@@ -684,7 +706,9 @@ fun TelaEventos(
                     )
                 }
                 items(anteriores, key = { it.id }) { evento ->
-                    Cartao(margem.animateItem().alpha(0.7f)) { LinhaEvento(evento, todas, { onAbrirEvento(evento.id) }) }
+                    Cartao(margem.animateItem().alpha(0.7f)) {
+                        LinhaEvento(evento, todas, { onAbrirEvento(evento.id) }, grupo = grupoDoEvento(evento, grupos))
+                    }
                 }
             }
             item(key = "agenda") {

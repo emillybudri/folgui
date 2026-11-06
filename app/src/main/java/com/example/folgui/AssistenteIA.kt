@@ -34,7 +34,12 @@ enum class TipoAcaoIA(val codigo: String) {
     SONO("sono"),
     CRIAR_EVENTO("criar_evento"),
     EDITAR_EVENTO("editar_evento"),
-    EXCLUIR_EVENTO("excluir_evento");
+    EXCLUIR_EVENTO("excluir_evento"),
+    CRIAR_GRUPO("criar_grupo"),
+    EDITAR_GRUPO("editar_grupo"),
+    EXCLUIR_GRUPO("excluir_grupo"),
+    MOVER_EVENTOS("mover_eventos"),
+    AVISOS_EVENTOS("avisos_eventos");
 
     companion object {
         fun porCodigo(codigo: String): TipoAcaoIA? = entries.firstOrNull { it.codigo == codigo }
@@ -54,8 +59,17 @@ data class AcaoIA(
     val duracaoMin: Int? = null,
     val local: String? = null,
     val participantes: Set<Int>? = null,
-    val antecedenciaMin: Int? = null
+    val antecedenciaMin: Int? = null,
+    /** Grupo do evento; [SEM_GRUPO_IA] tira o evento do grupo. */
+    val grupoId: Int? = null,
+    val cor: CorGrupo? = null,
+    val eventoIds: List<Int>? = null,
+    /** Lembretes em minutos; vazio em "avisos_eventos" tira todos. */
+    val avisos: List<Int>? = null
 )
+
+/** Na resposta da IA, 0 é campo não usado, então "sem grupo" tem um número próprio. */
+const val SEM_GRUPO_IA = -1
 
 data class MensagemIA(
     val deUsuario: Boolean,
@@ -75,7 +89,7 @@ data class MensagemIA(
 enum class SituacaoAcoes { PENDENTE, APLICADAS, DESCARTADAS }
 
 /** Resposta interpretada; [transcricao] traz o que a IA ouviu, quando o pedido foi por áudio. */
-data class RespostaIA(val mensagem: MensagemIA, val transcricao: String = "")
+data class RespostaIA(val mensagem: MensagemIA, val transcricao: String = "", val ajuste: AjusteLote? = null)
 
 /** Erro com mensagem pronta para mostrar ao usuário. */
 class ErroIA(mensagem: String) : Exception(mensagem)
@@ -94,6 +108,7 @@ class AssistenteIA(private val chave: String, private val modelo: String) {
         if (chave.isBlank()) throw ErroIA("A chave do Gemini não foi configurada. Coloque GEMINI_API_KEY no arquivo .env e gere o app de novo.")
 
         var ultimoErro = ""
+        var pedidoAtual = pedido
         // Picos de demanda atingem vários modelos ao mesmo tempo: depois de uma pausa, tenta outra volta
         repeat(VOLTAS) { volta ->
             if (volta > 0) delay(PAUSA_ENTRE_VOLTAS_MS)
@@ -101,13 +116,19 @@ class AssistenteIA(private val chave: String, private val modelo: String) {
                 var estruturado = true
                 while (true) {
                     val (codigo, corpo) = try {
-                        enviar(atual, montarCorpo(contexto, historico, todas, eventos, pedido, audioBase64, estruturado).toString())
+                        enviar(atual, montarCorpo(contexto, historico, todas, eventos, pedidoAtual, audioBase64, estruturado).toString())
                     } catch (e: java.net.SocketTimeoutException) {
                         ultimoErro = "A IA demorou demais para responder. Tente de novo."
                         break
                     }
                     when {
-                        codigo == 200 -> return@withContext interpretarResposta(extrairTexto(corpo))
+                        codigo == 200 -> {
+                            val resposta = interpretarResposta(extrairTexto(corpo))
+                            if (!listaPerdida(pedido, resposta)) return@withContext resposta
+                            // Uma insistência só: se a lista continuar sem vir, é melhor dizer isso
+                            if (pedidoAtual != pedido) return@withContext resposta.copy(mensagem = resposta.mensagem.copy(texto = TEXTO_LISTA_PERDIDA))
+                            pedidoAtual = pedido + NOTA_LISTA
+                        }
                         // Um modelo pode recusar o esquema; as instruções sozinhas já pedem o mesmo JSON
                         codigo == 400 && estruturado && "API_KEY" !in corpo -> estruturado = false
                         // Lotado, sem cota ou aposentado: o próximo modelo resolve
@@ -128,7 +149,8 @@ class AssistenteIA(private val chave: String, private val modelo: String) {
         try {
             conexao.requestMethod = "POST"
             conexao.connectTimeout = 15_000
-            conexao.readTimeout = 25_000
+            // Uma lista grande de compromissos leva mais tempo para voltar
+            conexao.readTimeout = 45_000
             conexao.doOutput = true
             conexao.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             conexao.setRequestProperty("x-goog-api-key", chave)
@@ -238,6 +260,10 @@ private fun esquemaResposta(comAudio: Boolean): JSONObject {
                 .put("local", tipo("string"))
                 .put("participantes", tipo("array").put("items", tipo("integer")))
                 .put("lembrete_min", tipo("integer"))
+                .put("grupo_id", tipo("integer"))
+                .put("cor", tipo("integer"))
+                .put("evento_ids", tipo("array").put("items", tipo("integer")))
+                .put("avisos_min", tipo("array").put("items", tipo("integer")))
         )
         // Obrigatórios para o modelo não esquecer o horário; quando não se aplicam, vêm vazios
         .put("required", JSONArray().put("tipo").put("titulo").put("dia").put("horario").put("evento_id"))
@@ -250,11 +276,76 @@ private fun esquemaResposta(comAudio: Boolean): JSONObject {
                 .put("entendi", tipo("string"))
                 .put("resposta", tipo("string"))
                 .put("acoes", tipo("array").put("items", acao))
+                .put("lote", esquemaLote())
         )
         // Com áudio, a transcrição é obrigatória: é o que a pessoa lê no balão da conversa
         .put(
             "required",
-            JSONArray().apply { if (comAudio) put("transcricao") }.put("entendi").put("resposta").put("acoes")
+            JSONArray().apply { if (comAudio) put("transcricao") }.put("entendi").put("resposta").put("acoes").put("lote")
+        )
+}
+
+private fun esquemaLote(): JSONObject {
+    fun tipo(t: String) = JSONObject().put("type", t)
+    fun numeros() = tipo("array").put("items", tipo("integer"))
+    val novo = JSONObject()
+        .put("type", "object")
+        .put(
+            "properties",
+            JSONObject()
+                .put("titulo", tipo("string"))
+                .put("profissional", tipo("string"))
+                .put("categoria", tipo("string"))
+                .put("dia", tipo("string"))
+                .put("ano_informado", tipo("boolean"))
+                .put("horario", tipo("string"))
+                .put("duracao_min", tipo("integer"))
+                .put("local", tipo("string"))
+        )
+        .put("required", JSONArray().put("titulo").put("dia").put("horario").put("ano_informado"))
+    val edicao = JSONObject()
+        .put("type", "object")
+        .put(
+            "properties",
+            JSONObject()
+                .put("n", tipo("integer"))
+                .put("titulo", tipo("string"))
+                .put("dia", tipo("string"))
+                .put("horario", tipo("string"))
+                .put("local", tipo("string"))
+        )
+        .put("required", JSONArray().put("n"))
+    return JSONObject()
+        .put("type", "object")
+        .put(
+            "properties",
+            JSONObject()
+                .put("novos", tipo("array").put("items", novo))
+                .put("grupo_sugerido", tipo("string"))
+                .put("grupo", tipo("string"))
+                .put("sem_grupo", tipo("boolean"))
+                .put("cor", tipo("integer"))
+                .put("manter_cor", tipo("boolean"))
+                .put("avisos_min", numeros())
+                .put("sem_avisos", tipo("boolean"))
+                .put("itens_avisos", numeros())
+                .put("duracao_min", tipo("integer"))
+                .put("itens_duracao", numeros())
+                .put("remover_itens", numeros())
+                .put("manter_itens", numeros())
+                .put("editar_itens", tipo("array").put("items", edicao))
+                .put("confirmar", tipo("boolean"))
+                .put("cancelar", tipo("boolean"))
+        )
+        // Com saída estruturada, o modelo omite o que é opcional, até o que a pessoa acabou de dizer
+        .put(
+            "required",
+            JSONArray(
+                listOf(
+                    "novos", "grupo_sugerido", "grupo", "sem_grupo", "cor", "manter_cor", "avisos_min", "sem_avisos", "itens_avisos",
+                    "duracao_min", "itens_duracao", "remover_itens", "manter_itens", "editar_itens", "confirmar", "cancelar"
+                )
+            )
         )
 }
 
@@ -271,7 +362,8 @@ private val INSTRUCOES = """
     7. Se a pessoa corrigir ou recusar uma proposta anterior, proponha de novo por completo, já corrigida.
 
     Responda só com este JSON:
-    {"transcricao":"","entendi":"","resposta":"","acoes":[]}
+    {"transcricao":"","entendi":"","resposta":"","acoes":[],"lote":{}}
+    - "lote" vem sempre, com todos os campos do modelo mais abaixo. Sem lista e sem plano em andamento, todos ficam vazios, false ou 0.
     - "transcricao": se o pedido veio em áudio, exatamente o que foi dito. Áudio inaudível: peça para repetir e deixe "acoes" vazio.
     - "entendi": uma frase com o que você entendeu, já com dia da semana, data e hora.
     - "resposta": a resposta para a pessoa. Se houver ações, peça para ela conferir. Nada é aplicado sem a confirmação dela, então nunca diga que já marcou, agendou ou alterou algo: diga o que vai fazer quando ela confirmar.
@@ -292,11 +384,47 @@ private val INSTRUCOES = """
     Só preencha "duracao_min" se a pessoa disser a duração ou a hora de terminar: o fim do evento é opcional.
     Use a lista de feriados para datas como "Natal". Datas sem ano são a próxima vez que acontecem a partir de hoje, nunca no passado.
     Só o que está na lista "Google Agenda" é somente leitura: para mudar esses, diga que é preciso abrir na Google Agenda. O que está na lista "Eventos do Folgui" você pode editar, remarcar e excluir.
+
+    GRUPOS são pastas de eventos, cada uma com uma cor que os eventos herdam. Evento sem grupo fica com a cor padrão da agenda. Cores (número: nome): 1 lilás, 2 verde-clara, 3 roxa, 4 rosa, 5 amarela, 6 laranja, 7 azul, 8 cinza, 9 azul-escura, 10 verde, 11 vermelha. Use só esses números.
+    {"tipo":"criar_grupo","titulo":"Consultas","cor":11}
+    {"tipo":"editar_grupo","grupo_id":1,"titulo":"novo nome","cor":3} (só o que muda; mudar a cor repinta todos os eventos do grupo)
+    {"tipo":"excluir_grupo","grupo_id":1} (os eventos continuam, sem grupo)
+    {"tipo":"mover_eventos","evento_ids":[1,2],"grupo_id":1} (grupo_id -1 tira do grupo)
+    {"tipo":"avisos_eventos","evento_ids":[1,2],"avisos_min":[1440,60]} (troca os avisos desses eventos; lista vazia tira todos)
+    "criar_evento" e "editar_evento" também aceitam "grupo_id" e "avisos_min". Minutos: 1 hora = 60, 1 dia = 1440, 1 semana = 10080. Máximo de 5 avisos, até 40320 minutos antes.
+
+    VÁRIOS COMPROMISSOS NOVOS: com dois ou mais compromissos para criar de uma vez, NÃO use "acoes": preencha só "lote". Um compromisso só continua sendo "criar_evento".
+    "lote":{"novos":[{"titulo":"...","profissional":"...","categoria":"...","dia":"AAAA-MM-DD","ano_informado":true,"horario":"16:12","duracao_min":50,"local":""}],"grupo_sugerido":"Consultas","grupo":"","sem_grupo":false,"cor":0,"manter_cor":false,"avisos_min":[],"sem_avisos":false,"itens_avisos":[],"duracao_min":0,"itens_duracao":[],"remover_itens":[],"manter_itens":[],"editar_itens":[{"n":1,"titulo":"","dia":"","horario":"","local":""}],"confirmar":false,"cancelar":false}
+    - "novos": um item por compromisso, sem pular nenhum e na ordem da mensagem. "titulo" é o texto do compromisso exatamente como foi escrito, com nome, maiúsculas e parênteses; nunca corrija, resuma ou invente nomes, mesmo que pareçam ter erro de digitação. "profissional" e "categoria" são copiados do texto (ex.: "Dra. ANA" e "psicóloga") e ficam vazios se não estiverem lá.
+    - Datas brasileiras são dia/mês/ano: 05/01/2027 é 5 de janeiro de 2027. Respeite o ano escrito, inclusive quando a lista vira o ano. "ano_informado" é true só se a pessoa escreveu o ano. "duracao_min" só se ela disse a duração ou a hora de terminar.
+    - Compromisso sem data ou sem hora: deixe o campo vazio, que o app avisa a pessoa.
+    - "grupo_sugerido": um nome curto para o conjunto, de preferência um grupo que já exista. Não é decisão da pessoa. "grupo" e "sem_grupo" só quando ELA disser. Um pedido completo traz tudo de uma vez, então preencha grupo, cor e avisos que ela já tiver dito.
+    Com um PLANO EM ANDAMENTO nos dados, a fala da pessoa é sobre ele e vai em "lote" (nunca em "novos", a não ser que ela traga compromissos novos). Leia a "Última pergunta feita à pessoa" para entender respostas curtas:
+    - Sobre o grupo sugerido: "sim" = "grupo" com o nome sugerido; "não" = "sem_grupo":true.
+    - Sobre manter a cor: "sim" = "manter_cor":true. "muda para azul" = "cor":7. Se a pergunta for da cor e dos avisos juntos, um "sim, 1 dia antes" responde as duas coisas.
+    - Sobre avisos: "1 dia antes e 1 hora antes" = "avisos_min":[1440,60]; "não" = "sem_avisos":true. "só nos três primeiros" = o mesmo em "avisos_min" com "itens_avisos":[1,2,3].
+    - "tira o 2" = "remover_itens":[2]. "só os três primeiros" (sem falar de avisos) = "manter_itens":[1,2,3]. "o 3 é às 15h" = "editar_itens". "todas de 50 minutos" = "duracao_min":50; só em algumas, com "itens_duracao".
+    - "confirmar":true só quando a pessoa mandar criar agora ("pode criar", "confirmo") e a última pergunta for a da prévia. "cancelar":true se ela desistir.
+    Em "resposta", com "lote", escreva só uma frase curta: o app monta as perguntas e a prévia. Nunca diga que já criou.
 """.trimIndent()
 
 // ----------------------------------------------------------------------------
 // Leitura da resposta
 // ----------------------------------------------------------------------------
+
+private val DATA_NO_TEXTO = Regex("""\b\d{1,2}/\d{1,2}(/\d{2,4})?\b""")
+private val HORA_NO_TEXTO = Regex("""\b\d{1,2}(:\d{2}|h\d{0,2})\b""")
+private const val NOTA_LISTA = "\n\n(Esta mensagem traz vários compromissos: preencha lote.novos com todos eles.)"
+private const val TEXTO_LISTA_PERDIDA = "Não consegui montar a lista dessa vez, e nada foi criado. Pode mandar de novo?"
+
+/**
+ * A mensagem traz várias datas com hora, mas a resposta não trouxe compromisso nenhum? Sem isto,
+ * a pessoa leria "encontrei 8 consultas" sem ter nada para conferir.
+ */
+internal fun listaPerdida(pedido: String?, resposta: RespostaIA): Boolean {
+    if (pedido == null || resposta.mensagem.acoes.isNotEmpty() || resposta.ajuste?.novos?.isNotEmpty() == true) return false
+    return DATA_NO_TEXTO.findAll(pedido).count() >= 2 && HORA_NO_TEXTO.findAll(pedido).count() >= 2
+}
 
 /** Texto da resposta do Gemini, ignorando as partes de raciocínio. */
 internal fun extrairTexto(corpo: String): String {
@@ -331,6 +459,15 @@ internal fun interpretarResposta(texto: String): RespostaIA {
     for (i in 0 until lista.length()) {
         lerAcao(lista.optJSONObject(i) ?: continue)?.takeIf(::acaoCompleta)?.let(acoes::add)
     }
+    val ajuste = json.optJSONObject("lote")?.let(::lerAjuste)?.takeIf { it.mudaPlano || it.confirmar || it.cancelar }
+    if (ajuste != null) {
+        // A lista vai para a prévia: nada dela passa pela confirmação de ações comuns
+        return RespostaIA(
+            MensagemIA(deUsuario = false, texto = json.optString("resposta").trim(), entendi = json.optString("entendi").trim()),
+            transcricao = json.optString("transcricao").trim(),
+            ajuste = ajuste
+        )
+    }
     val incompletas = lista.length() - acoes.size
     val resposta = json.optString("resposta").ifBlank { "Confira se é isso mesmo." }
     return RespostaIA(
@@ -354,6 +491,83 @@ internal fun interpretarResposta(texto: String): RespostaIA {
     )
 }
 
+private fun numeros(a: JSONArray?): List<Int> = a?.let { lista -> (0 until lista.length()).map(lista::optInt) }.orEmpty()
+
+/** Número da cor vindo da IA; 0 ou qualquer outro valor fora da paleta é ignorado. */
+private fun corDaIA(a: JSONObject): CorGrupo? = CorGrupo.porId(a.optInt("cor"))
+
+/**
+ * Um compromisso sozinho não é lista: segue pela confirmação de sempre, sem perguntas de grupo e
+ * avisos. Com plano aberto ele entra no plano, e grupo novo só o plano sabe criar.
+ */
+internal fun semLoteDeUmSo(r: RespostaIA, temPlano: Boolean, grupos: List<Grupo>): RespostaIA {
+    val ajuste = r.ajuste ?: return r
+    val item = ajuste.novos.singleOrNull() ?: return r
+    val grupo = grupoPorNome(grupos, ajuste.grupo)
+    if (temPlano || (ajuste.grupo.isNotBlank() && grupo == null)) return r
+    val acao = AcaoIA(
+        tipo = TipoAcaoIA.CRIAR_EVENTO,
+        dia = item.dia,
+        titulo = item.titulo,
+        horario = item.horario,
+        duracaoMin = item.duracaoMin ?: ajuste.duracaoMin,
+        local = item.local,
+        grupoId = grupo?.id,
+        avisos = ajuste.avisos
+    )
+    return r.copy(mensagem = r.mensagem.copy(texto = r.mensagem.texto.ifBlank { "Confira se é isso mesmo." }, acoes = listOf(acao)), ajuste = null)
+}
+
+private fun lerAjuste(o: JSONObject): AjusteLote {
+    val lista = o.optJSONArray("novos") ?: JSONArray()
+    val novos = (0 until lista.length()).mapNotNull { i ->
+        val n = lista.optJSONObject(i) ?: return@mapNotNull null
+        val titulo = n.optString("titulo").trim().take(TAMANHO_TITULO)
+        val horario = n.optString("horario").trim()
+        val dia = isoParaDia(n.optString("dia"))
+        if (titulo.isEmpty() || dia == null || !horarioValido(horario)) return@mapNotNull null
+        NovoItem(
+            titulo = titulo,
+            profissional = n.optString("profissional").trim(),
+            categoria = n.optString("categoria").trim(),
+            // Ano escrito pela pessoa nunca é trocado: se já passou, a prévia avisa
+            dia = if (n.optBoolean("ano_informado")) dia else proximaOcorrencia(dia),
+            horario = horarioDeMinutos(minutosDoHorario(horario)),
+            local = n.optString("local").trim().take(TAMANHO_TITULO),
+            duracaoMin = n.optInt("duracao_min").takeIf { it in 5..MINUTOS_DIA }
+        )
+    }
+    val edicoes = o.optJSONArray("editar_itens") ?: JSONArray()
+    return AjusteLote(
+        novos = novos,
+        incompletos = lista.length() - novos.size,
+        grupoSugerido = o.optString("grupo_sugerido"),
+        grupo = o.optString("grupo"),
+        semGrupo = o.optBoolean("sem_grupo"),
+        cor = corDaIA(o),
+        manterCor = o.optBoolean("manter_cor"),
+        avisos = numeros(o.optJSONArray("avisos_min")).takeIf { it.isNotEmpty() },
+        semAvisos = o.optBoolean("sem_avisos"),
+        itensAvisos = numeros(o.optJSONArray("itens_avisos")),
+        duracaoMin = o.optInt("duracao_min").takeIf { it in 5..MINUTOS_DIA },
+        itensDuracao = numeros(o.optJSONArray("itens_duracao")),
+        remover = numeros(o.optJSONArray("remover_itens")),
+        manter = numeros(o.optJSONArray("manter_itens")),
+        editar = (0 until edicoes.length()).mapNotNull { i ->
+            val e = edicoes.optJSONObject(i) ?: return@mapNotNull null
+            EdicaoItem(
+                n = e.optInt("n"),
+                titulo = e.optString("titulo").trim().take(TAMANHO_TITULO).ifEmpty { null },
+                dia = isoParaDia(e.optString("dia")),
+                horario = e.optString("horario").trim().takeIf(::horarioValido),
+                local = e.optString("local").trim().ifEmpty { null }
+            ).takeIf { it.n > 0 && listOf(it.titulo, it.dia, it.horario, it.local).any { campo -> campo != null } }
+        },
+        confirmar = o.optBoolean("confirmar"),
+        cancelar = o.optBoolean("cancelar")
+    )
+}
+
 private fun lerAcao(a: JSONObject): AcaoIA? {
     val tipo = TipoAcaoIA.porCodigo(a.optString("tipo")) ?: return null
     val entrada = a.optString("entrada")
@@ -374,7 +588,7 @@ private fun lerAcao(a: JSONObject): AcaoIA? {
         fimDia = isoParaDia(a.optString("fim"))?.let(::proximaOcorrencia),
         turno = turno,
         eventoId = inteiro("evento_id")?.takeIf { it > 0 },
-        titulo = textoOuNulo("titulo")?.take(60),
+        titulo = textoOuNulo("titulo")?.take(TAMANHO_TITULO),
         horario = (textoOuNulo("horario") ?: textoOuNulo("entrada"))?.takeIf(::horarioValido),
         duracaoMin = inteiro("duracao_min")?.takeIf { it in 15..MINUTOS_DIA },
         local = textoOuNulo("local")?.take(60),
@@ -382,7 +596,11 @@ private fun lerAcao(a: JSONObject): AcaoIA? {
         participantes = a.optJSONArray("participantes")?.let { p ->
             (0 until p.length()).map(p::optInt).filter { it != Pessoa.ID_VOCE }.toSet()
         },
-        antecedenciaMin = inteiro("lembrete_min")?.takeIf { m -> OPCOES_LEMBRETE.any { it.minutos == m } }
+        antecedenciaMin = inteiro("lembrete_min")?.takeIf { m -> OPCOES_LEMBRETE.any { it.minutos == m } },
+        grupoId = inteiro("grupo_id")?.takeIf { it != 0 },
+        cor = corDaIA(a),
+        eventoIds = a.optJSONArray("evento_ids")?.let(::numeros),
+        avisos = a.optJSONArray("avisos_min")?.let { normalizarAvisos(numeros(it)) }
     )
 }
 
@@ -403,9 +621,14 @@ private fun acaoCompleta(a: AcaoIA): Boolean = when (a.tipo) {
     TipoAcaoIA.TURNO, TipoAcaoIA.SONO -> a.turno != null
     TipoAcaoIA.CRIAR_EVENTO -> a.titulo != null && a.dia != null && a.horario != null
     TipoAcaoIA.EDITAR_EVENTO -> a.eventoId != null && listOf(
-        a.titulo, a.dia, a.horario, a.duracaoMin, a.local, a.participantes, a.antecedenciaMin
+        a.titulo, a.dia, a.horario, a.duracaoMin, a.local, a.participantes, a.antecedenciaMin, a.grupoId, a.avisos?.ifEmpty { null }
     ).any { it != null }
     TipoAcaoIA.EXCLUIR_EVENTO -> a.eventoId != null
+    TipoAcaoIA.CRIAR_GRUPO -> a.titulo != null && a.cor != null
+    TipoAcaoIA.EDITAR_GRUPO -> (a.grupoId ?: 0) > 0 && (a.titulo != null || a.cor != null)
+    TipoAcaoIA.EXCLUIR_GRUPO -> (a.grupoId ?: 0) > 0
+    TipoAcaoIA.MOVER_EVENTOS -> !a.eventoIds.isNullOrEmpty() && a.grupoId != null
+    TipoAcaoIA.AVISOS_EVENTOS -> !a.eventoIds.isNullOrEmpty() && a.avisos != null
 }
 
 // ----------------------------------------------------------------------------
@@ -422,8 +645,9 @@ fun eventoResultante(a: AcaoIA, eventos: List<Evento>): Evento? = when (a.tipo) 
         antecedenciaMin = a.antecedenciaMin ?: 60,
         duracaoMin = a.duracaoMin ?: SEM_FIM,
         // Sem participantes informados, o compromisso é só de quem pediu
-        participantes = a.participantes ?: emptySet()
-    )
+        participantes = a.participantes ?: emptySet(),
+        grupoId = a.grupoId?.coerceAtLeast(0) ?: 0
+    ).let { e -> if (a.avisos.isNullOrEmpty()) e else e.comAvisos(a.avisos) }
     TipoAcaoIA.EDITAR_EVENTO -> eventos.firstOrNull { it.id == a.eventoId }?.let { e ->
         e.copy(
             titulo = a.titulo ?: e.titulo,
@@ -432,8 +656,11 @@ fun eventoResultante(a: AcaoIA, eventos: List<Evento>): Evento? = when (a.tipo) 
             local = a.local ?: e.local,
             antecedenciaMin = a.antecedenciaMin ?: e.antecedenciaMin,
             duracaoMin = a.duracaoMin ?: e.duracaoMin,
-            participantes = a.participantes ?: e.participantes
-        )
+            participantes = a.participantes ?: e.participantes,
+            grupoId = a.grupoId?.coerceAtLeast(0) ?: e.grupoId,
+            // Aviso único pedido pela IA substitui os outros
+            avisosExtras = if (a.antecedenciaMin != null) emptyList() else e.avisosExtras
+        ).let { novo -> if (a.avisos.isNullOrEmpty()) novo else novo.comAvisos(a.avisos) }
     }
     else -> null
 }
@@ -442,11 +669,29 @@ fun eventoResultante(a: AcaoIA, eventos: List<Evento>): Evento? = when (a.tipo) 
  * Tira o que não pode ser aplicado (pessoa ou evento que não existem) e devolve avisos sobre
  * o que pode ser engano. Não depende da IA: é a garantia de que o pedido faz sentido.
  */
-fun verificarAcoes(acoes: List<AcaoIA>, todas: List<Pessoa>, eventos: List<Evento>): Pair<List<AcaoIA>, List<String>> {
+fun verificarAcoes(
+    acoes: List<AcaoIA>,
+    todas: List<Pessoa>,
+    eventos: List<Evento>,
+    grupos: List<Grupo> = emptyList()
+): Pair<List<AcaoIA>, List<String>> {
     val avisos = mutableListOf<String>()
     val validas = acoes.filter { a ->
         val deEvento = a.tipo == TipoAcaoIA.EDITAR_EVENTO || a.tipo == TipoAcaoIA.EXCLUIR_EVENTO
+        val citaGrupo = (a.grupoId ?: 0) > 0
         when {
+            citaGrupo && grupos.none { it.id == a.grupoId } -> {
+                avisos.add("Não achei o grupo que a IA citou, então deixei essa mudança de fora.")
+                false
+            }
+            a.eventoIds?.any { id -> eventos.none { it.id == id } } == true -> {
+                avisos.add("Não achei um dos eventos que a IA citou, então deixei essa mudança de fora.")
+                false
+            }
+            a.tipo == TipoAcaoIA.CRIAR_GRUPO && erroNomeGrupo(a.titulo.orEmpty(), grupos) != null -> {
+                avisos.add("Já existe o grupo ${a.titulo}.")
+                false
+            }
             deEvento && eventos.none { it.id == a.eventoId } -> {
                 avisos.add("Não achei o evento que a IA citou, então deixei essa mudança de fora.")
                 false
@@ -494,6 +739,12 @@ fun verificarAcoes(acoes: List<AcaoIA>, todas: List<Pessoa>, eventos: List<Event
             TipoAcaoIA.FERIAS -> if (pessoa?.temFerias == true) {
                 avisos.add("Isso substitui as férias já cadastradas de ${pessoa.nomeCurto}.")
             }
+            TipoAcaoIA.EDITAR_GRUPO -> grupos.firstOrNull { it.id == a.grupoId }?.let { g ->
+                val quantos = eventosDoGrupo(eventos, g.id).size
+                if (a.cor != null && a.cor != g.cor && quantos > 0) {
+                    avisos.add("${plural(quantos, "evento")} do grupo ${g.nome} vão mudar para a cor ${a.cor.comum}.")
+                }
+            }
             else -> Unit
         }
     }
@@ -507,12 +758,17 @@ fun verificarAcoes(acoes: List<AcaoIA>, todas: List<Pessoa>, eventos: List<Event
 /** Quantos dias de escala a IA enxerga em detalhe. */
 private const val DIAS_CONTEXTO = 45
 
+/** Nomes longos de profissionais precisam caber inteiros no título do evento. */
+const val TAMANHO_TITULO = 120
+
 /** Resumo enviado à IA: pessoas, escala dia a dia, sono, eventos, agenda e feriados. */
 fun contextoParaIA(
     todas: List<Pessoa>,
     eventos: List<Evento>,
     agenda: Map<Int, List<CompromissoAgenda>>,
-    feriados: Map<Int, String>
+    feriados: Map<Int, String>,
+    grupos: List<Grupo> = emptyList(),
+    plano: PlanoLote? = null
 ): String {
     val diaHoje = hoje()
     return buildString {
@@ -545,8 +801,18 @@ fun contextoParaIA(
                 appendLine(
                     "evento_id ${e.id}: \"${e.titulo}\" ${diaSemanaCurto(e.dia)} ${diaParaIso(e.dia)} ${e.faixaHorario}" +
                         (if (e.local.isNotBlank()) ", ${e.local}" else "") + ", com $quem" +
+                        (grupoDoEvento(e, grupos)?.let { ", grupo ${it.nome}" }.orEmpty()) +
+                        (if (e.avisos.isNotEmpty()) ", avisos ${rotuloAvisos(e.avisos)}" else "") +
                         if (e.jaPassou) " (já passou)" else ""
                 )
+            }
+        }
+        if (grupos.isEmpty()) {
+            appendLine("Grupos: nenhum.")
+        } else {
+            appendLine("Grupos:")
+            grupos.forEach { g ->
+                appendLine("grupo_id ${g.id}: ${g.nome}, cor ${g.cor.id} (${g.cor.comum}), ${plural(eventosDoGrupo(eventos, g.id).size, "evento")}")
             }
         }
         val compromissos = agenda.filterKeys { it in diaHoje..diaHoje + 30 }.toSortedMap()
@@ -560,11 +826,19 @@ fun contextoParaIA(
         if (proximos.isNotEmpty()) {
             appendLine("Feriados: " + proximos.entries.joinToString("; ") { "${diaParaIso(it.key)} ${it.value}" } + ".")
         }
+        if (plano != null && !plano.concluido) append(contextoDoPlano(plano, grupos))
     }
 }
 
 /** Frase da ação para a pessoa conferir antes de aplicar, com o antes e o depois. */
-fun descreverAcao(acao: AcaoIA, todas: List<Pessoa>, eventos: List<Evento>): String {
+fun descreverAcao(
+    acao: AcaoIA,
+    todas: List<Pessoa>,
+    eventos: List<Evento>,
+    grupos: List<Grupo> = emptyList()
+): String {
+    val grupo = grupos.firstOrNull { it.id == acao.grupoId }
+    val quantos = plural(acao.eventoIds.orEmpty().size, "evento")
     val nome = todas.firstOrNull { it.id == acao.pessoaId }?.nomeCurto ?: "Pessoa desconhecida"
     val dia = acao.dia?.let(::diaResumido).orEmpty()
     val atual = eventos.firstOrNull { it.id == acao.eventoId }
@@ -593,5 +867,13 @@ fun descreverAcao(acao: AcaoIA, todas: List<Pessoa>, eventos: List<Evento>): Str
         }
         TipoAcaoIA.EXCLUIR_EVENTO ->
             atual?.let { "Excluir \"${it.titulo}\" (${diaResumido(it.dia)}, ${it.faixaHorario})" } ?: "Excluir evento"
+        TipoAcaoIA.CRIAR_GRUPO -> "Novo grupo ${acao.titulo}, cor ${acao.cor?.comum}"
+        TipoAcaoIA.EDITAR_GRUPO -> "Grupo ${grupo?.nome}: " + listOfNotNull(
+            acao.titulo?.let { "novo nome $it" },
+            acao.cor?.let { "cor ${it.comum}, com os eventos dele" }
+        ).joinToString(", ")
+        TipoAcaoIA.EXCLUIR_GRUPO -> "Excluir o grupo ${grupo?.nome}. Os eventos continuam, sem grupo"
+        TipoAcaoIA.MOVER_EVENTOS -> if (grupo != null) "Mover $quantos para o grupo ${grupo.nome}" else "Tirar $quantos do grupo"
+        TipoAcaoIA.AVISOS_EVENTOS -> "Avisos de $quantos: ${rotuloAvisos(acao.avisos.orEmpty())}"
     }
 }

@@ -737,12 +737,43 @@ data class OpcaoLembrete(val minutos: Int, val rotulo: String)
 val OPCOES_LEMBRETE = listOf(
     OpcaoLembrete(-1, "Sem lembrete"),
     OpcaoLembrete(0, "No horário"),
+    OpcaoLembrete(30, "30 min antes"),
     OpcaoLembrete(60, "1 hora antes"),
-    OpcaoLembrete(1440, "1 dia antes")
+    OpcaoLembrete(120, "2 horas antes"),
+    OpcaoLembrete(1440, "1 dia antes"),
+    OpcaoLembrete(2880, "2 dias antes"),
+    OpcaoLembrete(10080, "1 semana antes")
 )
 
-fun rotuloLembrete(minutos: Int): String =
-    OPCOES_LEMBRETE.firstOrNull { it.minutos == minutos }?.rotulo ?: "Sem lembrete"
+/** A Google Agenda aceita até 5 lembretes por evento, de até 4 semanas antes. */
+const val MAX_AVISOS = 5
+const val MAX_ANTECEDENCIA_MIN = 40320
+
+/** Só os avisos que a agenda aceita, sem repetir, do mais cedo para o mais perto do evento. */
+fun normalizarAvisos(avisos: List<Int>): List<Int> =
+    avisos.filter { it in 0..MAX_ANTECEDENCIA_MIN }.distinct().sortedDescending().take(MAX_AVISOS)
+
+fun rotuloLembrete(minutos: Int): String = when {
+    minutos < 0 -> "Sem lembrete"
+    minutos == 0 -> "No horário"
+    minutos % 1440 == 0 -> "${plural(minutos / 1440, "dia")} antes"
+    minutos % 60 == 0 -> "${plural(minutos / 60, "hora")} antes"
+    else -> "$minutos min antes"
+}
+
+/** "45 min", "1h" ou "1h30". */
+fun rotuloDuracao(minutos: Int): String = when {
+    minutos < 60 -> "$minutos min"
+    minutos % 60 == 0 -> "${minutos / 60}h"
+    else -> "${minutos / 60}h${"%02d".format(minutos % 60)}"
+}
+
+/** "1 dia antes e 1 hora antes", ou "Sem lembrete". */
+fun rotuloAvisos(avisos: List<Int>): String {
+    if (avisos.isEmpty()) return "Sem lembrete"
+    val rotulos = avisos.map(::rotuloLembrete)
+    return if (rotulos.size == 1) rotulos[0] else rotulos.dropLast(1).joinToString(", ") + " e " + rotulos.last()
+}
 
 /** Durações possíveis de um evento, em minutos. */
 val OPCOES_DURACAO = listOf(60, 120, 180, 240, 360)
@@ -758,9 +789,31 @@ data class Evento(
     /** Ids de quem vai além de você (null = todas as pessoas). */
     val participantes: Set<Int>? = null,
     /** Id deste evento na Google Agenda (0 = ainda não está lá). */
-    val agendaId: Long = 0
+    val agendaId: Long = 0,
+    /** Grupo do evento (0 = sem grupo, e aí ele fica com a cor padrão da agenda). */
+    val grupoId: Int = 0,
+    /** Outros lembretes além de [antecedenciaMin]. */
+    val avisosExtras: List<Int> = emptyList(),
+    /** Profissional e categoria, que vão para a descrição na agenda. */
+    val detalhes: String = "",
+    /** Os lembretes estão gravados na agenda: quem avisa é ela, para não avisar duas vezes. */
+    val avisoNaAgenda: Boolean = false,
+    /** Foi apagado direto na Google Agenda e espera a pessoa decidir. */
+    val foraDaAgenda: Boolean = false
 ) {
     val momento: Long get() = momentoEm(dia, horario)
+
+    /** Todos os lembretes, em minutos antes do evento. */
+    val avisos: List<Int> get() = normalizarAvisos(listOf(antecedenciaMin) + avisosExtras)
+
+    fun comAvisos(lista: List<Int>): Evento {
+        val avisos = normalizarAvisos(lista)
+        return copy(antecedenciaMin = avisos.firstOrNull() ?: -1, avisosExtras = avisos.drop(1))
+    }
+
+    /** Lembretes que ainda vão tocar, do mais perto para o mais longe. */
+    val proximosLembretes: List<Long>
+        get() = avisos.map { momento - it * 60_000L }.filter { it > System.currentTimeMillis() }.sorted()
 
     /** A pessoa escolheu só o início: o evento fica sem hora para acabar. */
     val semFim: Boolean get() = duracaoMin == SEM_FIM

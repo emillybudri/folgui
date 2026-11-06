@@ -13,6 +13,9 @@ App Android para quem trabalha em escala: mostra de um jeito simples quais dias 
 - **Início que muda com a semana:** atalhos ilustrados mostram a próxima folga, o dia em que todos estão livres, o trabalho de amanhã e o próximo feriado. Só quem folga em feriados vê a pergunta, e só na semana anterior à data.
 - **Apresentação e modo fácil:** quem abre o app pela primeira vez vê um passo a passo, que pode ser revisto no perfil. O modo fácil aumenta os textos do app inteiro.
 - **Segundo emprego ou faculdade:** cada atividade tem nome e escala própria e conta nos horários ocupados.
+- **Grupos de eventos:** pastas com nome e cor, como "Consultas". Os eventos herdam a cor do grupo na Google Agenda; evento sem grupo fica com a cor padrão. Dá para criar, mover, ver próximos e anteriores, trocar a cor de todos de uma vez e excluir o grupo mantendo ou não os eventos.
+- **Vários compromissos de uma vez:** cole uma lista na conversa com a IA. Ela lê datas, horários e nomes, pergunta só o que faltou (grupo, cor, avisos), mostra uma prévia editável com conflitos e repetidos, e cria tudo depois de uma confirmação. Se um item falhar, a nova tentativa refaz só os pendentes.
+- **Google Agenda nos dois sentidos:** cor e até 5 avisos são gravados no evento. O que muda direto na agenda volta para o app ao abrir ou trocar de tela; evento apagado lá fica marcado no Folgui, com as opções de restaurar ou excluir.
 - **Assistente com IA (Gemini):** fica na barra do topo e aceita texto ou áudio, que aparece transcrito na conversa. Mostra o que entendeu, confere o pedido contra a escala e só altera algo depois da confirmação.
 
 ## Requisitos da atividade
@@ -41,9 +44,16 @@ Todos os arquivos ficam em `app/src/main/java/com/example/folgui`. Para quem est
 | Regras da escala | `Escala.kt` e `Datas.kt`: não dependem de tela e têm testes |
 | Dados no aparelho | `Preferencias.kt` (DataStore), `BancoHelper.kt` e `FolguiRepository.kt` (SQLite) |
 | Serviços externos | `ApiRepository.kt` (REST), `AgendaRepository.kt`, `NuvemRepository.kt`, `AmigosRepository.kt` e `AssistenteIA.kt` |
+| Grupos e listas | `Grupos.kt` (cores e conciliação), `Lote.kt` (plano da lista, sem tela) e `ServicoAgenda.kt` (app e agenda sempre juntos) |
 | Lembretes | `AlarmScheduler.kt`, `ReminderReceiver.kt`, `NotificationHelper.kt` e `BootReceiver.kt` |
 | Telas | Arquivos `Telas*.kt` e `EtapasEscala.kt` |
 | Aparência | `Tema.kt` e `Componentes.kt` |
+
+## Testes
+
+- `./gradlew :app:testDebugUnitTest`: regras, leitura da resposta da IA, listas, grupos e conciliação.
+- `./gradlew :app:connectedDebugAndroidTest`: agenda e banco de verdade, em um aparelho ou emulador. Apaga os dados do app no aparelho.
+- `FOLGUI_IA=1 ./gradlew :app:testDebugUnitTest --tests '*LoteGeminiTest' --rerun`: conversa real com o Gemini. Gasta a cota diária da chave.
 
 ## Versão de relógio
 

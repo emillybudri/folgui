@@ -33,6 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.datastore.preferences.core.edit
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -41,6 +44,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -86,6 +92,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
     val agendaRepository = remember { AgendaRepository(context) }
     val nuvem = remember { NuvemRepository() }
     val amigos = remember { AmigosRepository() }
+    val servico = remember { ServicoAgenda(context, repository, agendaRepository) }
 
     // O login vem antes de tudo; sem o Firebase configurado, o app abre sem conta
     val destinoInicial = remember {
@@ -99,6 +106,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
     // ------------------------------------------------------------------
     val pessoas = remember { mutableStateListOf<Pessoa>() }
     val eventos = remember { mutableStateListOf<Evento>() }
+    val grupos = remember { mutableStateListOf<Grupo>() }
     val excecoesVoce = remember { mutableStateMapOf<Int, Excecao>() }
 
     fun recarregar() {
@@ -106,6 +114,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
         pessoas.addAll(repository.listarPessoas())
         eventos.clear()
         eventos.addAll(repository.listarEventos())
+        grupos.clear()
+        grupos.addAll(repository.listarGrupos())
         excecoesVoce.clear()
         excecoesVoce.putAll(repository.listarExcecoes()[Pessoa.ID_VOCE].orEmpty())
     }
@@ -190,10 +200,17 @@ fun FolguiApp(eventoInicial: Int = 0) {
         if (!concedida) avisar("Sem permissão de notificações, os lembretes não serão exibidos.")
     }
 
-    /** Grava o evento na Google Agenda e guarda o id de lá, para mexer sempre no mesmo evento. */
+    /**
+     * Grava o evento na Google Agenda e guarda o id de lá, para mexer sempre no mesmo evento.
+     * Com os lembretes gravados nela, quem avisa é a agenda e o alarme do Folgui sai.
+     */
     fun copiarParaAgenda(evento: Evento): Boolean {
-        val id = agendaRepository.gravar(evento, repository.agendaIdDe(evento.id)) ?: return false
+        val cor = grupoDoEvento(evento, repository.listarGrupos())?.cor
+        val gravado = agendaRepository.salvar(evento, repository.agendaIdDe(evento.id), cor)
+        val id = gravado.id ?: return false
         repository.salvarAgendaId(evento.id, id)
+        repository.marcarAvisoNaAgenda(evento.id, gravado.avisosGravados)
+        if (gravado.avisosGravados) AlarmScheduler.cancel(context, evento.id)
         return true
     }
 
@@ -201,6 +218,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
     // por vez, então o de notificações espera este terminar.
     val aguardandoAgenda = remember { mutableListOf<Int>() }
     var pedirNotificacaoDepois by remember { mutableStateOf(false) }
+    // O que continuar depois da resposta ao pedido de acesso (criar a lista da IA, por exemplo)
+    var depoisDoAcesso by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val pedirAgenda = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -216,6 +235,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
             else -> avisar("Salvo só no Folgui: agenda indisponível.")
         }
         recarregar()
+        depoisDoAcesso?.invoke()
+        depoisDoAcesso = null
         if (pedirNotificacaoDepois) {
             pedirNotificacaoDepois = false
             pedirPermissao.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -224,7 +245,14 @@ fun FolguiApp(eventoInicial: Int = 0) {
 
     /** Mantém a Google Agenda igual ao Folgui (na primeira vez, pede o acesso). Retorna se já gravou. */
     fun sincronizarAgenda(evento: Evento): Boolean {
-        if (carregado.agendaDesligada) return false
+        if (carregado.agendaDesligada) {
+            // Fora da agenda, os avisos voltam a ser do Folgui
+            if (evento.avisoNaAgenda) {
+                repository.marcarAvisoNaAgenda(evento.id, false)
+                AlarmScheduler.schedule(context, evento.copy(avisoNaAgenda = false))
+            }
+            return false
+        }
         if (agendaRepository.temEscrita()) return copiarParaAgenda(evento)
         if (aguardandoAgenda.isEmpty()) pedirAgenda.launch(PERMISSOES_AGENDA)
         aguardandoAgenda.add(evento.id)
@@ -289,7 +317,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
             return
         }
         eventos.forEach { AlarmScheduler.cancel(context, it.id) }
-        repository.substituirTudo(dados.pessoas, dados.excecoesVoce, dados.eventos)
+        repository.substituirTudo(dados.pessoas, dados.excecoesVoce, dados.eventos, dados.grupos)
         dados.eventos.forEach { AlarmScheduler.schedule(context, it) }
         ultimoEnviado = copia.dados
         salvarPerfil(dados.perfil.comoPessoa(emptyMap())) {
@@ -378,7 +406,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
 
     // Envia a cópia pouco depois de cada mudança (o tempo de espera junta mudanças seguidas)
     val copiaLocal = perfil?.let {
-        dadosParaTexto(DadosNuvem(it, excecoesVoce.toMap(), pessoas.toList(), eventos.toList()))
+        dadosParaTexto(DadosNuvem(it, excecoesVoce.toMap(), pessoas.toList(), eventos.toList(), grupos.toList()))
     }
     LaunchedEffect(copiaLocal, conta, nuvemPronta, copiaEmConflito) {
         if (copiaLocal == null || conta == null || !nuvemPronta || copiaEmConflito != null) return@LaunchedEffect
@@ -439,6 +467,13 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
+    /** O evento que sai de um grupo volta para a cor padrão da agenda. */
+    fun devolverCorPadrao(antes: Evento?, depois: Evento) {
+        if (antes != null && antes.grupoId != 0 && depois.grupoId == 0) {
+            agendaRepository.aplicarCor(repository.agendaIdDe(depois.id), null)
+        }
+    }
+
     fun salvarEvento(evento: Evento, convidar: Boolean = true): Boolean {
         val id = if (evento.id == 0) {
             repository.inserirEvento(evento)
@@ -452,6 +487,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
         val salvo = evento.copy(id = id)
         val agendado = AlarmScheduler.schedule(context, salvo)
         val naAgenda = sincronizarAgenda(salvo)
+        devolverCorPadrao(eventos.firstOrNull { it.id == evento.id }, salvo)
         recarregar()
         if (evento.id == 0 && convidar) convidarAmigos(salvo)
 
@@ -469,7 +505,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
         avisar(
             if (agendado) {
-                val momento = salvo.momentoLembrete!!
+                val momento = salvo.proximosLembretes.first()
                 "$resultado Lembrete em ${diaResumido(diaDoMomento(momento))} às ${horarioDoMomento(momento)}."
             } else {
                 resultado
@@ -524,6 +560,82 @@ fun FolguiApp(eventoInicial: Int = 0) {
         if (eventoInicial > 0 && perfil != null) navController.navigate(Rotas.evento(eventoInicial))
     }
 
+    // Grupos: a cor é do grupo, então toda mudança aqui repinta os eventos dele na agenda
+    var criandoGrupo by rememberSaveable { mutableStateOf(false) }
+
+    /** Conta o que ficou sem pintar, para a pessoa saber. A próxima conciliação tenta de novo. */
+    fun avisarPintura(falhas: List<Evento>, sucesso: String) {
+        avisar(if (falhas.isEmpty()) sucesso else "${plural(falhas.size, "evento")} ficou sem a cor. Vou tentar de novo.")
+    }
+
+    fun criarGrupo(nome: String, cor: CorGrupo): Int {
+        val id = repository.inserirGrupo(Grupo(nome = nome.trim(), cor = cor))
+        recarregar()
+        if (id <= 0) avisar("Não foi possível criar o grupo.")
+        return id.coerceAtLeast(0)
+    }
+
+    fun editarGrupo(antes: Grupo, depois: Grupo) {
+        repository.atualizarGrupo(depois)
+        recarregar()
+        if (antes.cor == depois.cor) {
+            avisar("Grupo atualizado.")
+            return
+        }
+        scope.launch {
+            val falhas = servico.pintar(eventosDoGrupo(eventos, depois.id), depois.cor)
+            avisarPintura(falhas, "Eventos do grupo agora são cor ${depois.cor.comum}.")
+        }
+    }
+
+    fun excluirGrupo(grupo: Grupo, comEventos: Boolean) {
+        val doGrupo = eventosDoGrupo(eventos, grupo.id)
+        if (comEventos) {
+            doGrupo.forEach {
+                AlarmScheduler.cancel(context, it.id)
+                tirarDaAgenda(it)
+                repository.excluirEvento(it.id)
+            }
+        }
+        repository.excluirGrupo(grupo.id)
+        navController.navigateUp()
+        recarregar()
+        scope.launch {
+            if (!comEventos) servico.pintar(doGrupo, null)
+            avisar("Grupo excluído.", acao = "Desfazer".takeIf { !comEventos }) {
+                repository.inserirGrupo(grupo, manterId = true)
+                scope.launch {
+                    servico.mover(doGrupo, grupo)
+                    recarregar()
+                }
+            }
+        }
+    }
+
+    fun moverEventos(lista: List<Evento>, grupo: Grupo?) {
+        scope.launch {
+            val falhas = servico.mover(lista, grupo)
+            recarregar()
+            avisarPintura(falhas, if (grupo != null) "Movido para ${grupo.nome}." else "Fora do grupo.")
+        }
+    }
+
+    fun importarCompromisso(compromisso: CompromissoAgenda, grupo: Grupo) {
+        scope.launch {
+            val ok = servico.importar(compromisso, grupo)
+            recarregar()
+            avisar(if (ok) "Adicionado a ${grupo.nome}." else "Não consegui ler esse evento da agenda.")
+        }
+    }
+
+    fun restaurarEvento(evento: Evento) {
+        scope.launch {
+            val ok = servico.restaurar(evento, grupoDoEvento(evento, grupos)?.cor)
+            recarregar()
+            avisar(if (ok) "De volta à Google Agenda." else "Não consegui gravar na agenda.")
+        }
+    }
+
     // ------------------------------------------------------------------
     // 6. Assistente com IA: a conversa fica na memória enquanto o app está aberto
     // ------------------------------------------------------------------
@@ -531,12 +643,130 @@ fun FolguiApp(eventoInicial: Int = 0) {
     val mensagensIA = remember { mutableStateListOf<MensagemIA>() }
     var pensando by remember { mutableStateOf(false) }
 
+    // Lista de compromissos em revisão. Fica salva como texto para sobreviver a girar a tela
+    var planoTexto by rememberSaveable { mutableStateOf<String?>(null) }
+    val plano = remember(planoTexto) { planoTexto?.let(::textoParaPlano) }
+    // Só importa com um plano aberto, e é uma consulta ao provedor: não pode rodar a cada recomposição
+    val agendaGoogle by produceState(true, plano != null, agendaRepository.temEscrita()) {
+        value = withContext(Dispatchers.IO) { agendaRepository.temAgendaGoogle() }
+    }
+    var criandoPlano by remember { mutableStateOf(false) }
+    val compromissosPlano = remember { mutableStateListOf<CompromissoAgenda>() }
+    val diasPlano = plano?.itens?.map { it.dia }?.toSet()
+
+    fun mudarPlano(novo: PlanoLote?) {
+        planoTexto = novo?.let(::planoParaTexto)
+    }
+
+    /** Lê a agenda no período exato da lista, que pode passar do que o app já carregou. */
+    suspend fun lerCompromissos(p: PlanoLote): List<CompromissoAgenda> {
+        val dias = p.itens.map { it.dia }
+        if (dias.isEmpty() || !agendaRepository.temPermissao()) return emptyList()
+        return try {
+            agendaRepository.buscar(dias.min(), dias.max()).values.flatten()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    LaunchedEffect(diasPlano, agendaRepository.temPermissao()) {
+        compromissosPlano.clear()
+        plano?.let { compromissosPlano.addAll(lerCompromissos(it)) }
+    }
+
+    val analisesPlano = plano?.let { analisarPlano(it, eventos, compromissosPlano, voce) }.orEmpty()
+
+    /** O grupo do plano: usa o que já existe, repintando se a cor mudou, ou cria um novo. */
+    suspend fun grupoDoPlano(p: PlanoLote): Grupo? {
+        if (!p.temGrupo) return null
+        val cor = p.cor ?: corSugerida(grupos)
+        val existente = grupoPorNome(repository.listarGrupos(), p.grupoNome)
+        if (existente == null) {
+            val id = repository.inserirGrupo(Grupo(nome = p.grupoNome, cor = cor))
+            return if (id > 0) Grupo(id, p.grupoNome, cor) else null
+        }
+        if (existente.cor == cor) return existente
+        val novo = existente.copy(cor = cor)
+        repository.atualizarGrupo(novo)
+        servico.pintar(eventosDoGrupo(repository.listarEventos(), novo.id), cor)
+        return novo
+    }
+
+    /** Cria o que falta da lista. Com [soFolgui], a pessoa aceitou ficar sem a Google Agenda. */
+    fun criarPlano(soFolgui: Boolean = false) {
+        // Lido do estado, e não da composição: esta função pode rodar depois de um pedido de acesso
+        val atual = planoTexto?.let(::textoParaPlano) ?: return
+        if (criandoPlano) return
+        if (!soFolgui && !agendaRepository.temEscrita() && depoisDoAcesso == null) {
+            depoisDoAcesso = { criarPlano() }
+            pedirAgenda.launch(PERMISSOES_AGENDA)
+            return
+        }
+        val itens = itensParaCriar(atual, analisesPlano)
+        val fora = atual.pendentes.size - itens.size
+        if (itens.isEmpty()) {
+            mudarPlano(null)
+            mensagensIA.add(MensagemIA(deUsuario = false, texto = "Nada novo para criar: tudo já estava na sua agenda."))
+            return
+        }
+        if (!soFolgui && carregado.agendaDesligada) gravarAgendaConectada(true)
+        criandoPlano = true
+        scope.launch {
+            val grupo = grupoDoPlano(atual)
+            val final = if (atual.temGrupo && grupo == null) {
+                atual.copy(itens = atual.itens.map { it.copy(estado = EstadoItem.FALHOU, erro = "Não consegui criar o grupo") })
+            } else {
+                executarLote(
+                    plano = atual.copy(itens = atual.itens.filter { i -> i.estado == EstadoItem.CRIADO || itens.any { it.n == i.n } }),
+                    itens = itens,
+                    grupoId = grupo?.id ?: 0,
+                    criar = { servico.criar(it, grupo?.cor, soFolgui) },
+                    onProgresso = ::mudarPlano
+                )
+            }
+            mudarPlano(final)
+            recarregar()
+            criandoPlano = false
+            val repetidos = if (fora > 0) "\n${plural(fora, "compromisso")} já existia e ficou de fora." else ""
+            mensagensIA.add(MensagemIA(deUsuario = false, texto = resumoDoLote(final) + repetidos))
+        }
+    }
+
+    /** O que a fala da pessoa faz com a lista; devolve a resposta que aparece na conversa. */
+    suspend fun tratarAjuste(ajuste: AjusteLote, resposta: MensagemIA): MensagemIA {
+        // A pessoa pode ter mexido na prévia enquanto a IA respondia
+        val atual = planoTexto?.let(::textoParaPlano)
+        if (ajuste.confirmar && !ajuste.mudaPlano && atual != null && planoPronto(atual)) {
+            criarPlano()
+            return resposta.copy(texto = "Criando os eventos…")
+        }
+        val novo = aplicarAjuste(atual, ajuste, grupos.toList())
+        mudarPlano(novo)
+        if (novo == null) return resposta.copy(texto = "Tudo bem, não criei nada.")
+
+        // Primeira vez que a lista aparece: a agenda precisa estar liberada para conferir conflitos
+        if (atual == null && !agendaRepository.temEscrita() && !carregado.agendaDesligada && depoisDoAcesso == null) {
+            depoisDoAcesso = {}
+            pedirAgenda.launch(PERMISSOES_AGENDA)
+        }
+        val analises = analisarPlano(novo, eventos.toList(), lerCompromissos(novo), voce)
+        val faltando = ajuste.incompletos.takeIf { it > 0 }?.let {
+            listOf("${plural(it, "compromisso")} ficou de fora por falta de data ou hora.")
+        }.orEmpty()
+        return resposta.copy(
+            // Conta o que entrou de fato: o modelo às vezes reenvia a lista inteira
+            texto = perguntaDoPlano(novo, grupos.toList(), novo.itens.size - (atual?.takeIf { !it.concluido }?.itens?.size ?: 0), analises),
+            avisos = resposta.avisos + faltando
+        )
+    }
+
     /** Envia um pedido escrito ou gravado. A resposta passa pela conferência do app antes de aparecer. */
     fun pedirParaIA(pedido: String?, audio: File?, segundos: Int?) {
         val historico = mensagensIA.toList()
         val pessoasAgora = todas
         val eventosAgora = eventos.toList()
-        val contexto = contextoParaIA(pessoasAgora, eventosAgora, agenda.toMap(), feriados.toMap())
+        val gruposAgora = grupos.toList()
+        val contexto = contextoParaIA(pessoasAgora, eventosAgora, agenda.toMap(), feriados.toMap(), gruposAgora, plano)
         val indice = mensagensIA.size
         mensagensIA.add(MensagemIA(deUsuario = true, texto = pedido ?: "Transcrevendo…", audioSegundos = segundos))
         pensando = true
@@ -545,17 +775,23 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 val base64 = audio?.let { arquivo ->
                     withContext(Dispatchers.IO) { Base64.encodeToString(arquivo.readBytes(), Base64.NO_WRAP) }
                 }
-                val r = assistente.conversar(contexto, historico, pessoasAgora, eventosAgora, pedido, base64)
+                val aberto = planoTexto?.let(::textoParaPlano)?.concluido == false
+                val r = semLoteDeUmSo(assistente.conversar(contexto, historico, pessoasAgora, eventosAgora, pedido, base64), aberto, gruposAgora)
                 // O texto do áudio fica visível: é a primeira forma de conferir se a IA ouviu certo
                 if (audio != null) {
                     mensagensIA[indice] = mensagensIA[indice].copy(texto = r.transcricao.ifBlank { "Áudio sem transcrição" })
                 }
-                val (validas, avisos) = verificarAcoes(r.mensagem.acoes, pessoasAgora, eventosAgora)
-                r.mensagem.copy(
-                    acoes = validas,
-                    avisos = r.mensagem.avisos + avisos,
-                    descricoes = validas.map { descreverAcao(it, pessoasAgora, eventosAgora) }
-                )
+                val ajuste = r.ajuste
+                if (ajuste != null) {
+                    tratarAjuste(ajuste, r.mensagem)
+                } else {
+                    val (validas, avisos) = verificarAcoes(r.mensagem.acoes, pessoasAgora, eventosAgora, gruposAgora)
+                    r.mensagem.copy(
+                        acoes = validas,
+                        avisos = r.mensagem.avisos + avisos,
+                        descricoes = validas.map { descreverAcao(it, pessoasAgora, eventosAgora, gruposAgora) }
+                    )
+                }
             } catch (e: ErroIA) {
                 MensagemIA(deUsuario = false, texto = e.message ?: "Algo deu errado.")
             } catch (e: Exception) {
@@ -609,11 +845,60 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     repository.atualizarEvento(depois)
                     AlarmScheduler.schedule(context, depois)
                     sincronizarAgenda(depois)
+                    devolverCorPadrao(antes, depois)
                     desfazer.add {
                         repository.atualizarEvento(antes)
                         AlarmScheduler.schedule(context, antes)
                         sincronizarAgenda(antes)
                     }
+                }
+                TipoAcaoIA.CRIAR_GRUPO -> {
+                    val id = repository.inserirGrupo(Grupo(nome = a.titulo.orEmpty(), cor = a.cor ?: corSugerida(grupos)))
+                    if (id > 0) desfazer.add { repository.excluirGrupo(id) }
+                }
+                TipoAcaoIA.EDITAR_GRUPO -> {
+                    val antes = grupos.firstOrNull { it.id == a.grupoId } ?: return@forEach
+                    val depois = antes.copy(nome = a.titulo ?: antes.nome, cor = a.cor ?: antes.cor)
+                    val doGrupo = eventosDoGrupo(eventos, antes.id)
+                    repository.atualizarGrupo(depois)
+                    if (antes.cor != depois.cor) scope.launch { servico.pintar(doGrupo, depois.cor) }
+                    desfazer.add {
+                        repository.atualizarGrupo(antes)
+                        if (antes.cor != depois.cor) scope.launch { servico.pintar(doGrupo, antes.cor) }
+                    }
+                }
+                TipoAcaoIA.EXCLUIR_GRUPO -> {
+                    val antes = grupos.firstOrNull { it.id == a.grupoId } ?: return@forEach
+                    val doGrupo = eventosDoGrupo(eventos, antes.id)
+                    repository.excluirGrupo(antes.id)
+                    scope.launch { servico.pintar(doGrupo, null) }
+                    desfazer.add {
+                        repository.inserirGrupo(antes, manterId = true)
+                        repository.moverParaGrupo(doGrupo.map { it.id }, antes.id)
+                        scope.launch { servico.pintar(doGrupo, antes.cor) }
+                    }
+                }
+                TipoAcaoIA.MOVER_EVENTOS -> {
+                    val lista = eventos.filter { it.id in a.eventoIds.orEmpty() }
+                    val grupo = grupos.firstOrNull { it.id == a.grupoId }
+                    repository.moverParaGrupo(lista.map { it.id }, grupo?.id ?: 0)
+                    scope.launch { servico.pintar(lista, grupo?.cor) }
+                    desfazer.add {
+                        lista.groupBy { it.grupoId }.forEach { (id, parte) ->
+                            repository.moverParaGrupo(parte.map { it.id }, id)
+                            scope.launch { servico.pintar(parte, grupos.firstOrNull { it.id == id }?.cor) }
+                        }
+                    }
+                }
+                TipoAcaoIA.AVISOS_EVENTOS -> {
+                    val lista = eventos.filter { it.id in a.eventoIds.orEmpty() }
+                    fun gravar(e: Evento) {
+                        repository.atualizarEvento(e)
+                        AlarmScheduler.schedule(context, e)
+                        sincronizarAgenda(e)
+                    }
+                    lista.forEach { gravar(it.comAvisos(a.avisos.orEmpty())) }
+                    desfazer.add { lista.forEach(::gravar) }
                 }
                 TipoAcaoIA.EXCLUIR_EVENTO -> {
                     val antes = eventos.firstOrNull { it.id == a.eventoId } ?: return@forEach
@@ -686,8 +971,19 @@ fun FolguiApp(eventoInicial: Int = 0) {
     val rotaAtual = entrada?.destination?.route
     val mostrarAbas = rotaTemAbas(rotaAtual)
 
+    // Quem mexe no Google Calendar volta para cá sem trocar de tela: a volta também conta
+    var voltasAoApp by remember { mutableIntStateOf(0) }
+    val ciclo = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(ciclo) {
+        val observador = LifecycleEventObserver { _, evento ->
+            if (evento == Lifecycle.Event.ON_RESUME) voltasAoApp++
+        }
+        ciclo.addObserver(observador)
+        onDispose { ciclo.removeObserver(observador) }
+    }
+
     // Recarrega a agenda ao trocar de tela: um evento enviado para a Google Agenda logo aparece aqui
-    LaunchedEffect(agendaConectada, rotaAtual) {
+    LaunchedEffect(agendaConectada, rotaAtual, voltasAoApp) {
         if (agendaConectada) {
             val dados = try {
                 agendaRepository.buscar(hoje() - 62, hoje() + 400)
@@ -701,6 +997,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 vinculos.forEach { (id, agendaId) -> repository.salvarAgendaId(id, agendaId) }
                 recarregar()
             }
+            // Traz o que mudou direto na agenda: horário, nome, lembretes e eventos apagados
+            if (servico.conciliar()) recarregar()
         } else {
             agendaLida.clear()
         }
@@ -934,8 +1232,11 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     todas = todas,
                     agenda = agenda,
                     agendaConectada = agendaConectada,
+                    grupos = grupos,
                     snackbar = snackbar,
                     onAbrirEvento = { navController.navigate(Rotas.evento(it)) },
+                    onAbrirGrupo = { navController.navigate(Rotas.grupo(it)) },
+                    onNovoGrupo = { criandoGrupo = true },
                     onConectarAgenda = ::conectarAgenda,
                     onDesconectarAgenda = ::desconectarAgenda
                 )
@@ -956,13 +1257,53 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     mensagens = mensagensIA,
                     pensando = pensando,
                     iniciarGravando = entry.arguments?.getBoolean("audio") == true,
+                    grupos = grupos,
+                    plano = plano,
+                    analises = analisesPlano,
+                    criandoPlano = criandoPlano,
+                    agendaLiberada = agendaRepository.temEscrita(),
+                    agendaGoogle = agendaGoogle,
+                    onMudarPlano = ::mudarPlano,
+                    onCriarPlano = ::criarPlano,
+                    onConectarAgenda = ::conectarAgenda,
                     snackbar = snackbar,
                     onVoltar = { navController.navigateUp() },
                     onEnviar = { pedirParaIA(it, null, null) },
                     onEnviarAudio = { arquivo, segundos -> pedirParaIA(null, arquivo, segundos) },
                     onAplicar = ::aplicarMensagemIA,
                     onDescartar = { i -> mensagensIA[i] = mensagensIA[i].copy(situacao = SituacaoAcoes.DESCARTADAS) },
-                    onLimpar = { mensagensIA.clear() }
+                    onLimpar = {
+                        mensagensIA.clear()
+                        mudarPlano(null)
+                    }
+                )
+            }
+
+            composable(
+                Rotas.GRUPO,
+                arguments = listOf(navArgument("id") { type = NavType.IntType })
+            ) { entry ->
+                val id = entry.arguments?.getInt("id") ?: 0
+                TelaGrupo(
+                    grupo = grupos.firstOrNull { it.id == id },
+                    grupos = grupos,
+                    eventos = eventos,
+                    todas = todas,
+                    compromissos = agenda.values.flatten(),
+                    snackbar = snackbar,
+                    onVoltar = { navController.navigateUp() },
+                    onAbrirEvento = { navController.navigate(Rotas.evento(it)) },
+                    onNovoEvento = { navController.navigate(Rotas.novoEvento(grupo = id)) },
+                    onEditar = ::editarGrupo,
+                    onExcluir = ::excluirGrupo,
+                    onMover = ::moverEventos,
+                    onImportar = ::importarCompromisso,
+                    onRestaurar = ::restaurarEvento,
+                    onExcluirEvento = { e ->
+                        AlarmScheduler.cancel(context, e.id)
+                        repository.excluirEvento(e.id)
+                        recarregar()
+                    }
                 )
             }
 
@@ -1043,6 +1384,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     navArgument("quem") {
                         type = NavType.StringType
                         defaultValue = "*"
+                    },
+                    navArgument("grupo") {
+                        type = NavType.IntType
+                        defaultValue = 0
                     }
                 )
             ) { entry ->
@@ -1057,6 +1402,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     todas = todas,
                     agenda = agenda,
                     feriados = feriados,
+                    grupos = grupos,
+                    grupoSugerido = entry.arguments?.getInt("grupo") ?: 0,
+                    onNovoGrupo = ::criarGrupo,
                     onResponderFeriado = ::responderFeriado,
                     onVoltar = { navController.navigateUp() },
                     onSalvar = { evento ->
@@ -1075,6 +1423,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     todas = todas,
                     eventos = eventos,
                     feriados = feriados,
+                    grupos = grupos,
                     snackbar = snackbar,
                     onVoltar = {
                         // Aberto pela notificação, não há tela anterior: volta para o início
@@ -1083,6 +1432,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     onEditar = { navController.navigate(Rotas.editarEvento(id)) },
                     onRemarcar = ::remarcarEvento,
                     onExcluir = ::excluirEvento,
+                    onRestaurar = ::restaurarEvento,
+                    onAbrirGrupo = { navController.navigate(Rotas.grupo(it)) },
                     onAvisar = ::avisar
                 )
             }
@@ -1112,6 +1463,18 @@ fun FolguiApp(eventoInicial: Int = 0) {
             ocupado = conectandoAmigo,
             onConfirmar = ::conectarAmigo,
             onFechar = { adicionandoAmigo = false }
+        )
+    }
+
+    if (criandoGrupo) {
+        DialogoGrupo(
+            inicial = null,
+            grupos = grupos,
+            onSalvar = { nome, cor ->
+                criandoGrupo = false
+                criarGrupo(nome, cor)
+            },
+            onFechar = { criandoGrupo = false }
         )
     }
 

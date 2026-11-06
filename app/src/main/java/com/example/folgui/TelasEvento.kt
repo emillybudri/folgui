@@ -80,6 +80,9 @@ fun TelaFormularioEvento(
     todas: List<Pessoa>,
     agenda: Map<Int, List<CompromissoAgenda>>,
     feriados: Map<Int, String>,
+    grupos: List<Grupo> = emptyList(),
+    grupoSugerido: Int = 0,
+    onNovoGrupo: (String, CorGrupo) -> Int = { _, _ -> 0 },
     onResponderFeriado: (Int, Boolean) -> Unit,
     onVoltar: () -> Unit,
     onSalvar: (Evento) -> Unit
@@ -108,7 +111,11 @@ fun TelaFormularioEvento(
         mutableStateOf(participantesParaTexto(if (inicial != null) inicial.participantes else participantesSugeridos ?: emptySet()))
     }
     var local by rememberSaveable { mutableStateOf(inicial?.local ?: "") }
-    var antecedencia by rememberSaveable { mutableIntStateOf(inicial?.antecedenciaMin ?: 60) }
+    // Vários avisos podem ficar ligados; vazio = sem aviso
+    var avisos by rememberSaveable { mutableStateOf((inicial?.avisos ?: listOf(60)).joinToString(",")) }
+    val avisosEscolhidos = avisos.split(",").mapNotNull { it.toIntOrNull() }
+    var grupoId by rememberSaveable { mutableIntStateOf(inicial?.grupoId ?: grupoSugerido) }
+    var criandoGrupo by rememberSaveable { mutableStateOf(false) }
     var duracao by rememberSaveable { mutableIntStateOf(inicial?.duracaoMin ?: SEM_FIM) }
     var tentouSalvar by rememberSaveable { mutableStateOf(false) }
     var confirmarSono by rememberSaveable { mutableStateOf(false) }
@@ -119,10 +126,12 @@ fun TelaFormularioEvento(
         dia = dia,
         horario = horario,
         local = local.trim(),
-        antecedenciaMin = antecedencia,
+        antecedenciaMin = -1,
         duracaoMin = duracao,
-        participantes = textoParaParticipantes(quem)
-    )
+        participantes = textoParaParticipantes(quem),
+        grupoId = grupoId,
+        detalhes = inicial?.detalhes.orEmpty()
+    ).comAvisos(avisosEscolhidos)
     val quemVai = pessoasDoEvento(rascunho, todas)
     val outras = todas.filter { !it.ehVoce }
 
@@ -142,7 +151,7 @@ fun TelaFormularioEvento(
         else -> null
     }
     val erroLembrete = "Aviso no passado".takeIf {
-        erroData == null && erroHorario == null && rascunho.momentoLembrete?.let { it <= agora } == true
+        erroData == null && erroHorario == null && rascunho.avisos.isNotEmpty() && rascunho.proximosLembretes.isEmpty()
     }
     val valido = listOf(erroTitulo, erroData, erroHorario, erroLembrete).all { it == null }
 
@@ -198,7 +207,7 @@ fun TelaFormularioEvento(
                 Secao("Evento") {
                     CampoTexto(
                         valor = titulo,
-                        onValorChange = { titulo = it.take(60) },
+                        onValorChange = { titulo = it.take(TAMANHO_TITULO) },
                         rotulo = "Nome",
                         erro = erroVisivel(erroTitulo),
                         modifier = Modifier.fillMaxWidth()
@@ -211,6 +220,15 @@ fun TelaFormularioEvento(
                         capitalizacao = KeyboardCapitalization.Words,
                         acaoTeclado = ImeAction.Done,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Secao("Grupo") {
+                    SeletorGrupo(
+                        grupos = grupos,
+                        selecionado = grupoId,
+                        onEscolher = { grupoId = it },
+                        onNovo = { criandoGrupo = true }
                     )
                 }
 
@@ -323,10 +341,16 @@ fun TelaFormularioEvento(
                         verticalArrangement = Arrangement.spacedBy(Espaco.xs)
                     ) {
                         OPCOES_LEMBRETE.forEach { opcao ->
-                            val selecionada = antecedencia == opcao.minutos
+                            val selecionada = if (opcao.minutos < 0) avisosEscolhidos.isEmpty() else opcao.minutos in avisosEscolhidos
                             FilterChip(
                                 selected = selecionada,
-                                onClick = { antecedencia = opcao.minutos },
+                                onClick = {
+                                    avisos = when {
+                                        opcao.minutos < 0 -> emptyList()
+                                        selecionada -> avisosEscolhidos - opcao.minutos
+                                        else -> normalizarAvisos(avisosEscolhidos + opcao.minutos)
+                                    }.joinToString(",")
+                                },
                                 label = { Text(opcao.rotulo) },
                                 leadingIcon = if (selecionada) {
                                     { Icon(Icones.Confirmar, contentDescription = null, Modifier.size(18.dp)) }
@@ -337,7 +361,7 @@ fun TelaFormularioEvento(
                         }
                     }
                     val erro = erroVisivel(erroLembrete)
-                    val momentoAviso = rascunho.momentoLembrete
+                    val momentoAviso = rascunho.proximosLembretes.firstOrNull()
                     Text(
                         text = when {
                             erro != null -> erro
@@ -360,6 +384,18 @@ fun TelaFormularioEvento(
                 Spacer(Modifier.height(Espaco.lg))
             }
         }
+    }
+
+    if (criandoGrupo) {
+        DialogoGrupo(
+            inicial = null,
+            grupos = grupos,
+            onSalvar = { nome, cor ->
+                criandoGrupo = false
+                grupoId = onNovoGrupo(nome, cor)
+            },
+            onFechar = { criandoGrupo = false }
+        )
     }
 
     if (confirmarSono) {
@@ -388,11 +424,14 @@ fun TelaDetalheEvento(
     todas: List<Pessoa>,
     eventos: List<Evento>,
     feriados: Map<Int, String>,
+    grupos: List<Grupo> = emptyList(),
     snackbar: SnackbarHostState,
     onVoltar: () -> Unit,
     onEditar: () -> Unit,
     onRemarcar: (Evento, Evento) -> Unit,
     onExcluir: (Evento) -> Unit,
+    onRestaurar: (Evento) -> Unit = {},
+    onAbrirGrupo: (Int) -> Unit = {},
     onAvisar: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -426,8 +465,9 @@ fun TelaDetalheEvento(
             return@Scaffold
         }
 
-        val momentoAviso = atual.momentoLembrete
+        val momentoAviso = atual.proximosLembretes.firstOrNull()
         val quemVai = pessoasDoEvento(atual, todas)
+        val grupo = grupoDoEvento(atual, grupos)
 
         Column(
             modifier = Modifier
@@ -446,18 +486,22 @@ fun TelaDetalheEvento(
                     Text(atual.titulo, style = MaterialTheme.typography.headlineMedium)
                     feriados[atual.dia]?.let { SeloFeriado(it) }
                     InfoLinha(Icones.Calendario, diaPorExtenso(atual.dia), rotuloRelativo(atual.dia))
-                    InfoLinha(Icones.Relogio, atual.faixaHorario, if (atual.semFim) "Sem hora para acabar" else "Duração de ${atual.duracaoMin / 60}h")
+                    InfoLinha(Icones.Relogio, atual.faixaHorario, if (atual.semFim) "Sem hora para acabar" else "Duração de ${rotuloDuracao(atual.duracaoMin)}")
                     if (atual.local.isNotBlank()) InfoLinha(Icones.Local, atual.local)
                     InfoLinha(
                         Icones.Sino,
-                        rotuloLembrete(atual.antecedenciaMin),
+                        rotuloAvisos(atual.avisos),
                         when {
-                            momentoAviso == null -> null
-                            momentoAviso <= System.currentTimeMillis() -> "Aviso já enviado"
+                            atual.avisos.isEmpty() -> null
+                            momentoAviso == null -> "Aviso já enviado"
                             else -> "Aviso em ${diaResumido(diaDoMomento(momentoAviso))} às ${horarioDoMomento(momentoAviso)}"
                         }
                     )
+                    if (atual.detalhes.isNotBlank()) InfoLinha(Icones.Lista, atual.detalhes)
+                    if (grupo != null) LinhaGrupoDoEvento(grupo) { onAbrirGrupo(grupo.id) }
                 }
+
+                if (atual.foraDaAgenda) AvisoForaDaAgenda { onRestaurar(atual) }
 
                 // Vale também para evento que já passou: é assim que se remarca o que não aconteceu
                 Row(horizontalArrangement = Arrangement.spacedBy(Espaco.sm)) {

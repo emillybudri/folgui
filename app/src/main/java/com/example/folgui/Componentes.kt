@@ -445,7 +445,8 @@ fun SeloData(dia: Int, destaque: Boolean = false) {
             color = if (destaque) corConteudo(StatusDia.FOLGA) else MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = mesCurto(dia),
+            // Em outro ano, o ano aparece: "5 jan" sozinho não diz que é o ano que vem
+            text = if (p.ano == partes(hoje()).ano) mesCurto(dia) else "${mesCurto(dia)} ${p.ano % 100}",
             style = MaterialTheme.typography.labelSmall,
             color = if (destaque) corConteudo(StatusDia.FOLGA) else MaterialTheme.colorScheme.onSurfaceVariant
         )

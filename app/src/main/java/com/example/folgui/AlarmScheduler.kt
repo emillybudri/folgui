@@ -9,13 +9,24 @@ import android.os.Build
 // Agendamento de Tarefas com AlarmManager e PendingIntent
 object AlarmScheduler {
 
-    /** Agenda o lembrete do evento. Retorna false quando não há lembrete a agendar. */
+    /** Códigos dos alarmes de um evento: o primeiro é o id dele, como sempre foi. */
+    private fun codigo(id: Int, indice: Int) = id + indice * 10_000_000
+
+    /**
+     * Agenda os lembretes do evento. Retorna false quando não há lembrete a agendar.
+     * Quando a agenda já vai avisar, o alarme daqui fica de fora para não avisar duas vezes.
+     */
     fun schedule(context: Context, evento: Evento): Boolean {
         cancel(context, evento.id)
 
-        val momento = evento.momentoLembrete ?: return false
-        if (momento <= System.currentTimeMillis()) return false
+        val lembretes = evento.proximosLembretes
+        if (evento.foraDaAgenda || lembretes.isEmpty()) return false
+        if (evento.avisoNaAgenda) return true
+        lembretes.forEachIndexed { i, momento -> agendar(context, evento, momento, i) }
+        return true
+    }
 
+    private fun agendar(context: Context, evento: Evento, momento: Long, indice: Int) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val intent = Intent(context, ReminderReceiver::class.java).apply {
@@ -27,7 +38,7 @@ object AlarmScheduler {
 
         val pending = PendingIntent.getBroadcast(
             context,
-            evento.id,
+            codigo(evento.id, indice),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -42,18 +53,19 @@ object AlarmScheduler {
         } catch (e: SecurityException) {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, momento, pending)
         }
-        return true
     }
 
     fun cancel(context: Context, id: Int) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-        val pending = PendingIntent.getBroadcast(
-            context,
-            id,
-            Intent(context, ReminderReceiver::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        manager.cancel(pending)
+        repeat(MAX_AVISOS) { indice ->
+            val pending = PendingIntent.getBroadcast(
+                context,
+                codigo(id, indice),
+                Intent(context, ReminderReceiver::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            manager.cancel(pending)
+        }
     }
 }

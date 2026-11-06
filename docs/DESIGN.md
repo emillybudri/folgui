@@ -21,6 +21,10 @@
 
 Violeta nunca indica um estado do dia. Os valores do modo escuro estão em `Tema.kt`. Texto sobre os fundos tem contraste de pelo menos 7:1.
 
+### Cores de grupo
+
+As 11 cores de grupo são as da Google Agenda (`CorGrupo` em `Grupos.kt`) e identificam o grupo, não um estado do dia. Por isso aparecem só como um ponto ou faixa ao lado do nome, nunca como fundo de cartão ou de texto, e sempre com o nome da cor para leitores de tela.
+
 ## Navegação
 
 Hoje · Agenda · **+** · Eventos · Pessoas. A barra da IA e o perfil ficam fixos no topo das abas.

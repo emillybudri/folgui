@@ -27,6 +27,21 @@ App Android para quem trabalha em escala: mostra de um jeito simples quais dias 
 
 [Vídeo do app funcionando (56 s)](docs/demo.mp4), gravado com dados fictícios. Música: Uplifting Corporate, de Soundrider/Dope (CC BY 3.0).
 
+## Como o código está organizado
+
+Todos os arquivos ficam em `app/src/main/java/com/example/folgui`. Para quem está começando, esta é uma boa ordem de leitura:
+
+| Assunto | Arquivos |
+| --- | --- |
+| Início do app | `MainActivity.kt` abre o `FolguiApp.kt`, que guarda os dados da sessão e liga as telas às ações |
+| Navegação | `Navegacao.kt`: rotas e barra de abas |
+| Regras da escala | `Escala.kt` e `Datas.kt`: não dependem de tela e têm testes |
+| Dados no aparelho | `Preferencias.kt` (DataStore), `BancoHelper.kt` e `FolguiRepository.kt` (SQLite) |
+| Serviços externos | `ApiRepository.kt` (REST), `AgendaRepository.kt`, `NuvemRepository.kt` e `AssistenteIA.kt` |
+| Lembretes | `AlarmScheduler.kt`, `ReminderReceiver.kt`, `NotificationHelper.kt` e `BootReceiver.kt` |
+| Telas | Arquivos `Telas*.kt` e `EtapasEscala.kt` |
+| Aparência | `Tema.kt` e `Componentes.kt` |
+
 ## Design
 
 Cada cor tem um só significado, e as telas usam ícones e rótulos curtos. As regras estão em [docs/DESIGN.md](docs/DESIGN.md).

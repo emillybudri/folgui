@@ -27,7 +27,7 @@ As 11 cores de grupo são as da Google Agenda (`CorGrupo` em `Grupos.kt`) e iden
 
 ## Navegação
 
-Hoje · Agenda · **+** · Eventos · Pessoas. A barra da IA e o perfil ficam fixos no topo das abas.
+Hoje · Agenda · **+** · Eventos · Pessoas. O **+** sai um pouco para fora da barra, para ser a primeira coisa que o olho encontra. A barra da IA e o perfil ficam fixos no topo das abas.
 
 ## Movimento
 

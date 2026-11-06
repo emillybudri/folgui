@@ -1125,8 +1125,9 @@ private fun ConteudoApp(carregado: EstadoPerfil, rotaPedida: StateFlow<String?>,
         bottomBar = {
             AnimatedVisibility(
                 visible = mostrarAbas,
-                enter = expandVertically(tween(DURACAO_BARRAS), expandFrom = Alignment.Bottom) + fadeIn(tween(DURACAO_BARRAS)),
-                exit = shrinkVertically(tween(DURACAO_BARRAS), shrinkTowards = Alignment.Bottom) + fadeOut(tween(DURACAO_BARRAS))
+                // Sem recorte: o botão de criar passa da barra e não pode ser cortado na animação
+                enter = expandVertically(tween(DURACAO_BARRAS), expandFrom = Alignment.Bottom, clip = false) + fadeIn(tween(DURACAO_BARRAS)),
+                exit = shrinkVertically(tween(DURACAO_BARRAS), shrinkTowards = Alignment.Bottom, clip = false) + fadeOut(tween(DURACAO_BARRAS))
             ) {
                 BarraAbas(
                     rotaAtual = ultimaAba,

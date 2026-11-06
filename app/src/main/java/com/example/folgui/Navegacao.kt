@@ -1,17 +1,21 @@
 package com.example.folgui
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -68,25 +73,41 @@ private val ABAS = listOf(
     Aba(Rotas.PESSOAS, "Pessoas", Icones.Pessoas)
 )
 
-/** Abas com o botão de criar no centro: a ação mais comum fica sempre à mão. */
+private val TAMANHO_BOTAO_CRIAR = 60.dp
+
+/** Quanto o botão de criar passa da barra. Não conta na altura dela, para a tela não encolher. */
+private val SALIENCIA_BOTAO_CRIAR = 22.dp
+
+/** Abas com o botão de criar no centro, saltado da barra: a ação mais comum fica sempre à mão. */
 @Composable
 fun BarraAbas(rotaAtual: String?, onIr: (String) -> Unit, onCriar: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 8.dp) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(68.dp)
-                .padding(horizontal = Espaco.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ABAS.take(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                FilledIconButton(onClick = onCriar, modifier = Modifier.size(52.dp)) {
-                    Icon(Icones.Adicionar, contentDescription = "Novo evento")
-                }
+    val fundo = MaterialTheme.colorScheme.surfaceContainerLowest
+    Box {
+        Surface(color = fundo, shadowElevation = 8.dp) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(68.dp)
+                    .padding(horizontal = Espaco.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ABAS.take(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
+                Spacer(Modifier.weight(1f))
+                ABAS.drop(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
             }
-            ABAS.drop(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
+        }
+        // Fora da Surface, que cortaria o que passa da borda. O anel separa o botão da tela atrás dele
+        FilledIconButton(
+            onClick = onCriar,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = -SALIENCIA_BOTAO_CRIAR)
+                .size(TAMANHO_BOTAO_CRIAR)
+                .shadow(6.dp, CircleShape)
+                .border(4.dp, fundo, CircleShape)
+        ) {
+            Icon(Icones.Adicionar, contentDescription = "Novo evento", modifier = Modifier.size(28.dp))
         }
     }
 }

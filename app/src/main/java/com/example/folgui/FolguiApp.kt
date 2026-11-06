@@ -1,7 +1,6 @@
 package com.example.folgui
 
 import android.Manifest
-import android.content.Context
 import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,30 +9,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,19 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -74,198 +48,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// ============================================================================
-// Persistência de Preferências com DataStore: a escala do próprio usuário
-// ============================================================================
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "preferencias")
-
-private val CHAVE_NOME = stringPreferencesKey("nome")
-private val CHAVE_ESCALA = stringPreferencesKey("escala")
-private val CHAVE_INICIO = stringPreferencesKey("inicio_ciclo")
-private val CHAVE_FERIAS_INICIO = stringPreferencesKey("ferias_inicio")
-private val CHAVE_FERIAS_FIM = stringPreferencesKey("ferias_fim")
-private val CHAVE_CIDADE = stringPreferencesKey("cidade")
-private val CHAVE_AGENDA = stringPreferencesKey("google_agenda")
-private val CHAVE_DIAS_SEMANA = stringPreferencesKey("dias_semana")
-private val CHAVE_TURNO_INICIO = stringPreferencesKey("turno_inicio")
-private val CHAVE_TURNO_FIM = stringPreferencesKey("turno_fim")
-private val CHAVE_PADRAO = stringPreferencesKey("padrao")
-private val CHAVE_DESCANSO = stringPreferencesKey("descanso_min")
-private val CHAVE_SONO = stringPreferencesKey("sono")
-private val CHAVE_VISAO = stringPreferencesKey("visao_calendario")
-private val CHAVE_NUVEM_EM = stringPreferencesKey("nuvem_atualizada_em")
-private val CHAVE_ATIVIDADES = stringPreferencesKey("atividades")
-
-data class Perfil(
-    val nome: String,
-    val escala: TipoEscala,
-    val inicioCiclo: Int,
-    val feriasInicio: Int?,
-    val feriasFim: Int?,
-    val cidade: String,
-    val padrao: List<Turno?>,
-    val descansoMin: Int,
-    val sono: Turno?,
-    val atividades: List<Atividade> = emptyList()
-) {
-    fun comoPessoa(excecoes: Map<Int, Excecao>) = Pessoa(
-        id = Pessoa.ID_VOCE,
-        nome = nome,
-        escala = escala,
-        inicioCiclo = inicioCiclo,
-        padrao = padrao,
-        feriasInicio = feriasInicio,
-        feriasFim = feriasFim,
-        descansoMin = descansoMin,
-        excecoes = excecoes,
-        sono = sono,
-        atividades = atividades
-    )
-}
-
-/** Envolve o perfil para diferenciar "carregando" (null) de "ainda não configurado" (perfil null). */
-private data class EstadoPerfil(
-    val perfil: Perfil?,
-    val agendaConectada: Boolean,
-    /** A pessoa negou o acesso ou desconectou: o Folgui não pede de novo nem grava na agenda. */
-    val agendaDesligada: Boolean,
-    val visao: VisaoCalendario
-)
-
-private fun lerPerfil(prefs: Preferences): Perfil? {
-    val nome = prefs[CHAVE_NOME] ?: return null
-    val inicio = textoParaDia(prefs[CHAVE_INICIO] ?: "") ?: return null
-    val escala = TipoEscala.porCodigo(prefs[CHAVE_ESCALA])
-    // Perfis antigos com escala 5x2 viram "dias fixos" com os mesmos dias da semana
-    val diasSemana = prefs[CHAVE_DIAS_SEMANA]?.toIntOrNull()
-        ?: if (prefs[CHAVE_ESCALA] == "5x2") diasSemanaDe5x2(inicio) else SEG_A_SEX
-    return Perfil(
-        nome = nome,
-        escala = escala,
-        inicioCiclo = inicio,
-        feriasInicio = textoParaDia(prefs[CHAVE_FERIAS_INICIO] ?: ""),
-        feriasFim = textoParaDia(prefs[CHAVE_FERIAS_FIM] ?: ""),
-        cidade = prefs[CHAVE_CIDADE] ?: "",
-        // Perfis da versão anterior guardavam só um turno: monta o ciclo a partir dele
-        padrao = textoParaPadrao(prefs[CHAVE_PADRAO] ?: "") ?: padraoLegado(
-            escala,
-            diasSemana,
-            Turno(
-                prefs[CHAVE_TURNO_INICIO]?.toIntOrNull() ?: escala.turnoPadrao.inicio,
-                prefs[CHAVE_TURNO_FIM]?.toIntOrNull() ?: escala.turnoPadrao.fim
-            )
-        ),
-        descansoMin = prefs[CHAVE_DESCANSO]?.toIntOrNull() ?: 0,
-        sono = Turno.deCodigo(prefs[CHAVE_SONO] ?: ""),
-        atividades = textoParaAtividades(prefs[CHAVE_ATIVIDADES] ?: "")
-    )
-}
-
 enum class Carga { CARREGANDO, OK, ERRO }
 
-// ============================================================================
-// Navegação entre telas com NavController e NavHost
-// ============================================================================
-object Rotas {
-    const val BOAS_VINDAS = "boas_vindas"
-    const val CONFIGURAR = "configurar"
-    const val INICIO = "inicio"
-    const val CALENDARIO = "calendario"
-    const val PESSOAS = "pessoas"
-    const val EVENTOS = "eventos"
-    const val PERFIL = "perfil"
-    const val PESSOA = "pessoa/{id}"
-    const val DIA = "dia/{dia}"
-    const val FORM_EVENTO = "evento/{id}?dia={dia}&hora={hora}&quem={quem}"
-    const val EVENTO = "detalhe_evento/{id}"
-    const val QUANDO_DA = "quando_da"
-    const val ASSISTENTE = "assistente?audio={audio}"
-
-    fun pessoa(id: Int) = "pessoa/$id"
-    fun dia(dia: Int) = "dia/$dia"
-    fun novoEvento(dia: Int? = null, hora: Int = -1, quem: Set<Int>? = null) =
-        "evento/0?dia=${dia ?: -1}&hora=$hora&quem=${participantesParaTexto(quem)}"
-    fun editarEvento(id: Int) = "evento/$id"
-    fun evento(id: Int) = "detalhe_evento/$id"
-    fun assistente(audio: Boolean = false) = "assistente?audio=$audio"
-}
-
-private data class Aba(val rota: String, val rotulo: String, val icone: ImageVector)
-
-private val ABAS = listOf(
-    Aba(Rotas.INICIO, "Hoje", Icones.Inicio),
-    Aba(Rotas.CALENDARIO, "Agenda", Icones.Calendario),
-    Aba(Rotas.EVENTOS, "Eventos", Icones.Evento),
-    Aba(Rotas.PESSOAS, "Pessoas", Icones.Pessoas)
-)
-
-/** Abas com o botão de criar no centro: a ação mais comum fica sempre à mão. */
-@Composable
-fun BarraAbas(rotaAtual: String?, onIr: (String) -> Unit, onCriar: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLowest, shadowElevation = 8.dp) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(68.dp)
-                .padding(horizontal = Espaco.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ABAS.take(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                FilledIconButton(onClick = onCriar, modifier = Modifier.size(52.dp)) {
-                    Icon(Icones.Adicionar, contentDescription = "Novo evento")
-                }
-            }
-            ABAS.drop(2).forEach { ItemAba(it, rotaAtual == it.rota) { onIr(it.rota) } }
-        }
-    }
-}
-
-@Composable
-private fun RowScope.ItemAba(aba: Aba, selecionada: Boolean, onClick: () -> Unit) {
-    val cor = if (selecionada) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        Modifier
-            .weight(1f)
-            .fillMaxHeight()
-            .clickable(role = Role.Tab, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(aba.icone, contentDescription = null, tint = cor)
-        Text(
-            aba.rotulo,
-            style = MaterialTheme.typography.labelSmall,
-            color = cor,
-            fontWeight = if (selecionada) FontWeight.Bold else FontWeight.Medium
-        )
-    }
-}
-
-private fun NavHostController.irParaAba(rota: String) {
-    navigate(rota) {
-        popUpTo(Rotas.INICIO) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
+/**
+ * Coração do app: guarda os dados da sessão e liga cada tela às suas ações.
+ *
+ * Está dividido em sete partes, marcadas com comentários:
+ * 1. dados do SQLite, 2. feriados, 3. Google Agenda, 4. conta,
+ * 5. sono, eventos e pessoas, 6. assistente com IA, 7. telas.
+ */
 @Composable
 fun FolguiApp(eventoInicial: Int = 0) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val estadoFlow = remember {
-        context.dataStore.data.map {
-            EstadoPerfil(
-                lerPerfil(it),
-                it[CHAVE_AGENDA] == "1",
-                it[CHAVE_AGENDA] == "0",
-                VisaoCalendario.porNome(it[CHAVE_VISAO])
-            )
-        }
-    }
+    val estadoFlow = remember { context.dataStore.data.map(::lerEstado) }
     val estado by estadoFlow.collectAsState(initial = null)
 
     // Abertura animada por um instante (não aparece quando o app é aberto pela notificação)
@@ -294,7 +91,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
     }
     val perfil = carregado.perfil
 
-    // Dados do SQLite (as mudanças na escala do usuário ficam na tabela de exceções com id -1)
+    // ------------------------------------------------------------------
+    // 1. Dados do SQLite (as mudanças na escala do usuário ficam na tabela de exceções com id -1)
+    // ------------------------------------------------------------------
     val pessoas = remember { mutableStateListOf<Pessoa>() }
     val eventos = remember { mutableStateListOf<Evento>() }
     val excecoesVoce = remember { mutableStateMapOf<Int, Excecao>() }
@@ -344,7 +143,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
 
     fun responderFeriado(dia: Int, trabalha: Boolean) = mudarDia(voce, dia, voce.respostaFeriado(dia, trabalha))
 
-    // Feriados nacionais (BrasilAPI), carregados por ano conforme a necessidade
+    // ------------------------------------------------------------------
+    // 2. Feriados nacionais (BrasilAPI), carregados por ano conforme a necessidade
+    // ------------------------------------------------------------------
     val feriados = remember { mutableStateMapOf<Int, String>() }
     val cargaFeriados = remember { mutableStateMapOf<Int, Carga>() }
 
@@ -367,7 +168,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
         carregarFeriados(ano + 1)
     }
 
-    // Compromissos da Google Agenda (lidos só depois que o usuário conecta e permite o acesso)
+    // ------------------------------------------------------------------
+    // 3. Google Agenda (lida só depois que o usuário conecta e permite o acesso)
+    // ------------------------------------------------------------------
     val agendaLida = remember { mutableStateMapOf<Int, List<CompromissoAgenda>>() }
     val agenda = semEventosDoFolgui(agendaLida, eventos)
     val agendaConectada = carregado.agendaConectada && agendaRepository.temPermissao()
@@ -429,30 +232,32 @@ fun FolguiApp(eventoInicial: Int = 0) {
         if (!carregado.agendaDesligada) agendaRepository.excluir(repository.agendaIdDe(evento.id))
     }
 
+    fun conectarAgenda() {
+        if (agendaRepository.temEscrita()) {
+            gravarAgendaConectada(true)
+            avisar("Google Agenda conectada.")
+        } else {
+            pedirAgenda.launch(PERMISSOES_AGENDA)
+        }
+    }
+
+    fun desconectarAgenda() {
+        gravarAgendaConectada(false)
+        avisar("Google Agenda desconectada.")
+    }
+
     // Navega só depois da gravação, para a próxima tela já mostrar os dados novos
     fun salvarPerfil(pessoa: Pessoa, cidade: String, depois: () -> Unit) {
         scope.launch {
-            context.dataStore.edit { prefs ->
-                prefs[CHAVE_NOME] = pessoa.nome
-                prefs[CHAVE_ESCALA] = pessoa.escala.codigo
-                prefs[CHAVE_INICIO] = diaParaTexto(pessoa.inicioCiclo)
-                prefs[CHAVE_FERIAS_INICIO] = pessoa.feriasInicio?.let(::diaParaTexto) ?: ""
-                prefs[CHAVE_FERIAS_FIM] = pessoa.feriasFim?.let(::diaParaTexto) ?: ""
-                prefs[CHAVE_CIDADE] = cidade
-                prefs[CHAVE_DIAS_SEMANA] = pessoa.diasSemana.toString()
-                prefs[CHAVE_TURNO_INICIO] = (pessoa.turnos.firstOrNull() ?: pessoa.escala.turnoPadrao).inicio.toString()
-                prefs[CHAVE_TURNO_FIM] = (pessoa.turnos.firstOrNull() ?: pessoa.escala.turnoPadrao).fim.toString()
-                prefs[CHAVE_PADRAO] = padraoParaTexto(pessoa.padrao)
-                prefs[CHAVE_DESCANSO] = pessoa.descansoMin.toString()
-                prefs[CHAVE_SONO] = pessoa.sono?.codigo ?: ""
-                prefs[CHAVE_ATIVIDADES] = atividadesParaTexto(pessoa.atividades)
-            }
+            context.salvarPerfilNasPreferencias(pessoa, cidade)
             depois()
         }
     }
 
-    // Conta do Google: a cópia na nuvem só é enviada depois de comparada com o que já existe lá,
+    // ------------------------------------------------------------------
+    // 4. Conta: a cópia na nuvem só é enviada depois de comparada com o que já existe lá,
     // para um aparelho desatualizado não apagar o que foi feito em outro
+    // ------------------------------------------------------------------
     var conta by remember { mutableStateOf(nuvem.contaAtual) }
     var nuvemPronta by remember { mutableStateOf(false) }
     var copiaEmConflito by remember { mutableStateOf<CopiaNuvem?>(null) }
@@ -586,7 +391,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
-    // Horário de sono, editado direto pela tela inicial ou pela semana
+    // ------------------------------------------------------------------
+    // 5. Sono, eventos e pessoas: salvar, remarcar e excluir
+    // ------------------------------------------------------------------
     var editandoSono by rememberSaveable { mutableStateOf(false) }
 
     fun salvarSono(sono: Turno?) {
@@ -649,12 +456,54 @@ fun FolguiApp(eventoInicial: Int = 0) {
         return true
     }
 
+    fun excluirEvento(evento: Evento) {
+        AlarmScheduler.cancel(context, evento.id)
+        tirarDaAgenda(evento)
+        repository.excluirEvento(evento.id)
+        navController.navigateUp()
+        recarregar()
+        avisar("Evento excluído.", acao = "Desfazer") {
+            repository.inserirEvento(evento, manterId = true)
+            AlarmScheduler.schedule(context, evento)
+            sincronizarAgenda(evento)
+            recarregar()
+        }
+    }
+
+    fun salvarPessoa(pessoa: Pessoa, existente: Pessoa?) {
+        val ok = if (existente == null) {
+            repository.inserirPessoa(pessoa) > 0
+        } else {
+            repository.atualizarPessoa(pessoa.copy(id = existente.id))
+        }
+        recarregar()
+        navController.navigateUp()
+        avisar(
+            when {
+                !ok -> "Não foi possível salvar."
+                existente == null -> "${pessoa.nome} entrou nas suas pessoas."
+                else -> "Escala de ${pessoa.nome} atualizada."
+            }
+        )
+    }
+
+    fun excluirPessoa(pessoa: Pessoa) {
+        repository.excluirPessoa(pessoa.id)
+        navController.navigateUp()
+        recarregar()
+        avisar("${pessoa.nome} foi removida.", acao = "Desfazer") {
+            repository.inserirPessoa(pessoa, manterId = true)
+            pessoa.excecoes.values.forEach { repository.salvarExcecao(pessoa.id, it) }
+            recarregar()
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (eventoInicial > 0 && perfil != null) navController.navigate(Rotas.evento(eventoInicial))
     }
 
     // ------------------------------------------------------------------
-    // Assistente com IA: a conversa fica na memória enquanto o app está aberto
+    // 6. Assistente com IA: a conversa fica na memória enquanto o app está aberto
     // ------------------------------------------------------------------
     val assistente = remember { AssistenteIA(BuildConfig.GEMINI_API_KEY, BuildConfig.GEMINI_MODEL) }
     val mensagensIA = remember { mutableStateListOf<MensagemIA>() }
@@ -793,9 +642,23 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
+    /** Confirma as mudanças de uma resposta da IA, com opção de desfazer. */
+    fun aplicarMensagemIA(indice: Int) {
+        val mensagem = mensagensIA[indice]
+        val desfazer = aplicarAcoes(mensagem.acoes)
+        mensagensIA[indice] = mensagem.copy(situacao = SituacaoAcoes.APLICADAS)
+        avisar("Mudanças aplicadas.", acao = "Desfazer") {
+            desfazer()
+            mensagensIA[indice] = mensagem.copy(situacao = SituacaoAcoes.PENDENTE)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 7. Telas: a barra de cima, as abas e a lista de rotas
+    // ------------------------------------------------------------------
     val entrada by navController.currentBackStackEntryAsState()
     val rotaAtual = entrada?.destination?.route
-    val mostrarAbas = ABAS.any { it.rota == rotaAtual }
+    val mostrarAbas = rotaTemAbas(rotaAtual)
 
     // Recarrega a agenda ao trocar de tela: um evento enviado para a Google Agenda logo aparece aqui
     LaunchedEffect(agendaConectada, rotaAtual) {
@@ -948,18 +811,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     agendaConectada = agendaConectada,
                     snackbar = snackbar,
                     onAbrirEvento = { navController.navigate(Rotas.evento(it)) },
-                    onConectarAgenda = {
-                        if (agendaRepository.temEscrita()) {
-                            gravarAgendaConectada(true)
-                            avisar("Google Agenda conectada.")
-                        } else {
-                            pedirAgenda.launch(PERMISSOES_AGENDA)
-                        }
-                    },
-                    onDesconectarAgenda = {
-                        gravarAgendaConectada(false)
-                        avisar("Google Agenda desconectada.")
-                    }
+                    onConectarAgenda = ::conectarAgenda,
+                    onDesconectarAgenda = ::desconectarAgenda
                 )
             }
 
@@ -982,15 +835,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     onVoltar = { navController.navigateUp() },
                     onEnviar = { pedirParaIA(it, null, null) },
                     onEnviarAudio = { arquivo, segundos -> pedirParaIA(null, arquivo, segundos) },
-                    onAplicar = { i ->
-                        val m = mensagensIA[i]
-                        val desfazer = aplicarAcoes(m.acoes)
-                        mensagensIA[i] = m.copy(situacao = SituacaoAcoes.APLICADAS)
-                        avisar("Mudanças aplicadas.", acao = "Desfazer") {
-                            desfazer()
-                            mensagensIA[i] = m.copy(situacao = SituacaoAcoes.PENDENTE)
-                        }
-                    },
+                    onAplicar = ::aplicarMensagemIA,
                     onDescartar = { i -> mensagensIA[i] = mensagensIA[i].copy(situacao = SituacaoAcoes.DESCARTADAS) },
                     onLimpar = { mensagensIA.clear() }
                 )
@@ -1028,34 +873,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     inicial = existente,
                     cidadeInicial = null,
                     onVoltar = { navController.navigateUp() },
-                    onSalvar = { pessoa, _ ->
-                        val ok = if (existente == null) {
-                            repository.inserirPessoa(pessoa) > 0
-                        } else {
-                            repository.atualizarPessoa(pessoa.copy(id = existente.id))
-                        }
-                        recarregar()
-                        navController.navigateUp()
-                        avisar(
-                            when {
-                                !ok -> "Não foi possível salvar."
-                                existente == null -> "${pessoa.nome} entrou nas suas pessoas."
-                                else -> "Escala de ${pessoa.nome} atualizada."
-                            }
-                        )
-                    },
-                    onExcluir = existente?.let { p ->
-                        {
-                            repository.excluirPessoa(p.id)
-                            navController.navigateUp()
-                            recarregar()
-                            avisar("${p.nome} foi removida.", acao = "Desfazer") {
-                                repository.inserirPessoa(p, manterId = true)
-                                p.excecoes.values.forEach { repository.salvarExcecao(p.id, it) }
-                                recarregar()
-                            }
-                        }
-                    }
+                    onSalvar = { pessoa, _ -> salvarPessoa(pessoa, existente) },
+                    onExcluir = existente?.let { p -> { excluirPessoa(p) } }
                 )
             }
 
@@ -1134,19 +953,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     },
                     onEditar = { navController.navigate(Rotas.editarEvento(id)) },
                     onRemarcar = ::remarcarEvento,
-                    onExcluir = { evento ->
-                        AlarmScheduler.cancel(context, evento.id)
-                        tirarDaAgenda(evento)
-                        repository.excluirEvento(evento.id)
-                        navController.navigateUp()
-                        recarregar()
-                        avisar("Evento excluído.", acao = "Desfazer") {
-                            repository.inserirEvento(evento, manterId = true)
-                            AlarmScheduler.schedule(context, evento)
-                            sincronizarAgenda(evento)
-                            recarregar()
-                        }
-                    },
+                    onExcluir = ::excluirEvento,
                     onAvisar = ::avisar
                 )
             }

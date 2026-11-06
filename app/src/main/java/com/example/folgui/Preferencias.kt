@@ -31,6 +31,7 @@ val CHAVE_VISAO = stringPreferencesKey("visao_calendario")
 val CHAVE_NUVEM_EM = stringPreferencesKey("nuvem_atualizada_em")
 private val CHAVE_ATIVIDADES = stringPreferencesKey("atividades")
 private val CHAVE_FERIADOS = stringPreferencesKey("folga_feriados")
+val CHAVE_MODO_FACIL = stringPreferencesKey("modo_facil")
 
 data class Perfil(
     val nome: String,
@@ -67,7 +68,9 @@ data class EstadoPerfil(
     val agendaConectada: Boolean,
     /** A pessoa negou o acesso ou desconectou: o Folgui não pede de novo nem grava na agenda. */
     val agendaDesligada: Boolean,
-    val visao: VisaoCalendario
+    val visao: VisaoCalendario,
+    /** Letras maiores no app inteiro. */
+    val modoFacil: Boolean
 )
 
 private fun lerPerfil(prefs: Preferences): Perfil? {
@@ -104,7 +107,8 @@ fun lerEstado(prefs: Preferences) = EstadoPerfil(
     perfil = lerPerfil(prefs),
     agendaConectada = prefs[CHAVE_AGENDA] == "1",
     agendaDesligada = prefs[CHAVE_AGENDA] == "0",
-    visao = VisaoCalendario.porNome(prefs[CHAVE_VISAO])
+    visao = VisaoCalendario.porNome(prefs[CHAVE_VISAO]),
+    modoFacil = prefs[CHAVE_MODO_FACIL] == "1"
 )
 
 /** Grava a escala do usuário nas preferências. */

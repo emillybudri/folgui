@@ -35,6 +35,7 @@ import androidx.navigation.compose.NavHost
 object Rotas {
     const val BOAS_VINDAS = "boas_vindas"
     const val CONFIGURAR = "configurar"
+    const val APRESENTACAO = "apresentacao"
     const val INICIO = "inicio"
     const val CALENDARIO = "calendario"
     const val PESSOAS = "pessoas"

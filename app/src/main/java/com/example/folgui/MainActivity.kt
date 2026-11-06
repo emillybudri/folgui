@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import kotlinx.coroutines.flow.map
 
 class MainActivity : ComponentActivity() {
 
@@ -19,8 +22,11 @@ class MainActivity : ComponentActivity() {
         val eventoNotificacao = if (savedInstanceState == null) intent.getIntExtra(EXTRA_EVENTO, 0) else 0
 
         setContent {
+            val modoFacil by dataStore.data.map { it[CHAVE_MODO_FACIL] == "1" }.collectAsState(initial = false)
             FolguiTema {
-                FolguiApp(eventoInicial = eventoNotificacao)
+                TamanhoDoTexto(modoFacil) {
+                    FolguiApp(eventoInicial = eventoNotificacao)
+                }
             }
         }
     }

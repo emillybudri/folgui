@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
@@ -392,6 +394,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
+    fun mudarModoFacil(ligado: Boolean) {
+        scope.launch { context.dataStore.edit { it[CHAVE_MODO_FACIL] = if (ligado) "1" else "0" } }
+    }
+
     // ------------------------------------------------------------------
     // 5. Sono, eventos e pessoas: salvar, remarcar e excluir
     // ------------------------------------------------------------------
@@ -744,9 +750,17 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     onSalvar = { pessoa, cidade ->
                         salvarPerfil(pessoa, cidade) {
                             irParaInicio()
-                            avisar("Tudo pronto!")
+                            navController.navigate(Rotas.APRESENTACAO)
                         }
                     }
+                )
+            }
+
+            composable(Rotas.APRESENTACAO) {
+                TelaApresentacao(
+                    modoFacil = carregado.modoFacil,
+                    onModoFacil = ::mudarModoFacil,
+                    onConcluir = { navController.navigateUp() }
                 )
             }
 
@@ -852,10 +866,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     modo = ModoEscala.PERFIL,
                     inicial = voce,
                     cidadeInicial = perfil?.cidade ?: "",
-                    extraInicio = if (nuvem.configurada) {
-                        { LinhaConta(conta?.email, entrando, ::entrarComGoogle, ::sairDaConta) }
-                    } else {
-                        null
+                    extraInicio = {
+                        if (nuvem.configurada) LinhaConta(conta?.email, entrando, ::entrarComGoogle, ::sairDaConta)
+                        LinhaModoFacil(carregado.modoFacil, ::mudarModoFacil)
+                        TextButton(onClick = { navController.navigate(Rotas.APRESENTACAO) }) { Text("Ver a apresentação") }
                     },
                     onVoltar = { navController.navigateUp() },
                     onSalvar = { pessoa, cidade ->

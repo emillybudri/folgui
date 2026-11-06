@@ -7,6 +7,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -133,6 +136,14 @@ private val Formas = Shapes(
 
 /** Algarismos tabulares: números de datas e temperaturas alinham verticalmente. */
 val TextStyle.numerico get() = copy(fontFeatureSettings = "tnum")
+
+/** No modo fácil, todo texto do app fica um quarto maior. */
+@Composable
+fun TamanhoDoTexto(modoFacil: Boolean, conteudo: @Composable () -> Unit) {
+    val atual = LocalDensity.current
+    val escala = if (modoFacil) 1.25f else 1f
+    CompositionLocalProvider(LocalDensity provides Density(atual.density, atual.fontScale * escala), content = conteudo)
+}
 
 @Composable
 fun FolguiTema(conteudo: @Composable () -> Unit) {

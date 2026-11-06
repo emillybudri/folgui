@@ -415,7 +415,7 @@ fun VisaoAno(
     )
 
     Row(horizontalArrangement = Arrangement.spacedBy(Espaco.sm)) {
-        val chaves: List<Any> = if (modoGrupo) SituacaoGrupo.entries else listOf(StatusDia.TRABALHO, StatusDia.FOLGA, StatusDia.FERIAS)
+        val chaves: List<Any> = if (modoGrupo) QualidadeDia.entries else StatusDia.entries
         chaves.forEach { chave ->
             val a = aparencia(chave)
             Contador(

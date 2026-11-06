@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -109,7 +111,7 @@ fun TelaFormularioEvento(
     }
     var local by rememberSaveable { mutableStateOf(inicial?.local ?: cidadePadrao) }
     var antecedencia by rememberSaveable { mutableIntStateOf(inicial?.antecedenciaMin ?: 60) }
-    var duracao by rememberSaveable { mutableIntStateOf(inicial?.duracaoMin ?: 120) }
+    var duracao by rememberSaveable { mutableIntStateOf(inicial?.duracaoMin ?: SEM_FIM) }
     var tentouSalvar by rememberSaveable { mutableStateOf(false) }
     var confirmarSono by rememberSaveable { mutableStateOf(false) }
 
@@ -163,8 +165,8 @@ fun TelaFormularioEvento(
     val janela = rascunho.janela
     val livres = temHorario && todosLivres(quemVai, dia, janela)
     val inicioPossivel = if (dia == hoje()) ((minutoDoDiaAtual() + 59) / 60) * 60 else 0
-    val horariosDoDia = janelasLivres(quemVai, dia, de = maxOf(7 * 60, inicioPossivel), minimo = duracao)
-    val melhores = remember(quemVai, duracao) { melhoresDias(quemVai, duracao) }
+    val horariosDoDia = janelasLivres(quemVai, dia, de = maxOf(7 * 60, inicioPossivel), minimo = rascunho.janela.duracao)
+    val melhores = remember(quemVai, duracao) { melhoresDias(quemVai, rascunho.janela.duracao) }
     val horariosLivres = if (livres) emptyList() else horariosDoDia.take(3)
     val sugestao = if (horariosDoDia.isEmpty()) melhores.firstOrNull { it != dia } else null
     val voce = todas.first { it.ehVoce }
@@ -244,14 +246,14 @@ fun TelaFormularioEvento(
                     MelhoresDias(
                         pessoas = quemVai,
                         dias = melhores,
-                        duracao = duracao,
+                        duracao = rascunho.janela.duracao,
                         selecionado = dia,
                         onEscolher = { dia = it }
                     )
                     CalendarioEscolha(
                         dia = dia,
                         pessoas = quemVai,
-                        duracao = duracao,
+                        duracao = rascunho.janela.duracao,
                         feriados = feriados,
                         onEscolher = { dia = it }
                     )
@@ -453,7 +455,7 @@ fun TelaDetalheEvento(
                     Text(atual.titulo, style = MaterialTheme.typography.headlineMedium)
                     feriados[atual.dia]?.let { SeloFeriado(it) }
                     InfoLinha(Icones.Calendario, diaPorExtenso(atual.dia), rotuloRelativo(atual.dia))
-                    InfoLinha(Icones.Relogio, atual.faixaHorario, "Duração de ${atual.duracaoMin / 60}h")
+                    InfoLinha(Icones.Relogio, atual.faixaHorario, if (atual.semFim) "Sem hora para acabar" else "Duração de ${atual.duracaoMin / 60}h")
                     if (atual.local.isNotBlank()) InfoLinha(Icones.Local, atual.local)
                     InfoLinha(
                         Icones.Sino,
@@ -502,7 +504,7 @@ fun TelaDetalheEvento(
                                     CompromissoAgenda(
                                         titulo = atual.titulo,
                                         inicio = atual.momento,
-                                        fim = atual.momento + atual.duracaoMin * 60_000L,
+                                        fim = atual.momento + atual.janela.duracao * 60_000L,
                                         diaInteiro = false,
                                         agenda = "",
                                         eventoId = atual.agendaId
@@ -928,8 +930,8 @@ private fun ItemLegendaEscolha(fundo: Color, borda: Color, rotulo: String) {
 }
 
 /**
- * Horário arrastável: a barra mostra quando todos estão livres no dia (verde) e
- * as duas alças escolhem início e fim, de meia em meia hora.
+ * Horário arrastável: a barra mostra quando todos estão livres no dia (verde).
+ * Começa com uma alça só, a do início; o fim é opcional e ganha a segunda alça.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -942,8 +944,9 @@ private fun SeletorHorario(
     onMudar: (Int, Int) -> Unit,
     onHorarioExato: () -> Unit
 ) {
+    val semFim = duracao == SEM_FIM
     val fim = minOf(inicio + duracao, MINUTOS_DIA)
-    val janela = Janela(inicio, duracao)
+    val janela = Janela(inicio, duracaoReservada(duracao))
     val ocupadas = pessoas.filter { !it.livre(dia, janela) }
     val todosLivres = ocupadas.isEmpty()
 
@@ -952,11 +955,19 @@ private fun SeletorHorario(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (escolhido) "${horarioDeMinutos(inicio)} – ${horarioDeMinutos(inicio + duracao)}" else "Escolha a hora",
+                        when {
+                            !escolhido -> "Escolha a hora"
+                            semFim -> horarioDeMinutos(inicio)
+                            else -> "${horarioDeMinutos(inicio)} – ${horarioDeMinutos(inicio + duracao)}"
+                        },
                         style = MaterialTheme.typography.headlineSmall.numerico
                     )
                     Text(
-                        if (duracao % 60 == 0) "${duracao / 60}h de duração" else "${duracao / 60}h${duracao % 60} de duração",
+                        when {
+                            semFim -> "Sem hora para acabar"
+                            duracao % 60 == 0 -> "${duracao / 60}h de duração"
+                            else -> "${duracao / 60}h${duracao % 60} de duração"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -974,16 +985,30 @@ private fun SeletorHorario(
                     .padding(horizontal = 10.dp),
                 altura = 10.dp
             )
-            RangeSlider(
-                value = inicio.toFloat()..fim.toFloat(),
-                onValueChange = { faixa ->
-                    val a = (faixa.start / 30).roundToInt() * 30
-                    val b = (faixa.endInclusive / 30).roundToInt() * 30
-                    if (b - a >= 30) onMudar(a, b - a)
-                },
-                valueRange = 0f..MINUTOS_DIA.toFloat(),
-                steps = MINUTOS_DIA / 30 - 1
-            )
+            if (semFim) {
+                Slider(
+                    value = inicio.toFloat(),
+                    onValueChange = { onMudar(minOf((it / 30).roundToInt() * 30, MINUTOS_DIA - 30), SEM_FIM) },
+                    valueRange = 0f..MINUTOS_DIA.toFloat(),
+                    steps = MINUTOS_DIA / 30 - 1,
+                    // Só o início importa aqui: a trilha pintada daria a ideia de um período
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = MaterialTheme.colorScheme.secondaryContainer,
+                        activeTickColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            } else {
+                RangeSlider(
+                    value = inicio.toFloat()..fim.toFloat(),
+                    onValueChange = { faixa ->
+                        val a = (faixa.start / 30).roundToInt() * 30
+                        val b = (faixa.endInclusive / 30).roundToInt() * 30
+                        if (b - a >= 30) onMudar(a, b - a)
+                    },
+                    valueRange = 0f..MINUTOS_DIA.toFloat(),
+                    steps = MINUTOS_DIA / 30 - 1
+                )
+            }
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -994,6 +1019,9 @@ private fun SeletorHorario(
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            TextButton(onClick = {
+                onMudar(inicio, if (semFim) minOf(120, MINUTOS_DIA - inicio) else SEM_FIM)
+            }) { Text(if (semFim) "Definir fim (opcional)" else "Tirar o fim") }
 
             // Retorno imediato enquanto arrasta
             if (escolhido) {

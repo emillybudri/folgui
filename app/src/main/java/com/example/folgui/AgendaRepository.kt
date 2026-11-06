@@ -88,7 +88,7 @@ class AgendaRepository(context: Context) {
             put(CalendarContract.Events.EVENT_LOCATION, evento.local)
             put(CalendarContract.Events.DESCRIPTION, "Marcado no Folgui")
             put(CalendarContract.Events.DTSTART, evento.momento)
-            put(CalendarContract.Events.DTEND, evento.momento + evento.duracaoMin * 60_000L)
+            put(CalendarContract.Events.DTEND, evento.momento + evento.janela.duracao * 60_000L)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
             put(CalendarContract.Events.AVAILABILITY, CalendarContract.Events.AVAILABILITY_BUSY)
         }
@@ -209,7 +209,7 @@ object IntegracaoGoogle {
             putExtra(CalendarContract.Events.EVENT_LOCATION, evento.local)
             putExtra(CalendarContract.Events.DESCRIPTION, "Evento planejado no Folgui em um dia de folga.")
             putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, evento.momento)
-            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, evento.momento + evento.duracaoMin * 60_000L)
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, evento.momento + evento.janela.duracao * 60_000L)
             putExtra(CalendarContract.Events.AVAILABILITY, CalendarContract.Events.AVAILABILITY_BUSY)
             if (convidados.isNotEmpty()) putExtra(Intent.EXTRA_EMAIL, convidados.joinToString(","))
         }

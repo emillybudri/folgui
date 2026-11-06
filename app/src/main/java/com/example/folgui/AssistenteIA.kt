@@ -414,7 +414,7 @@ fun eventoResultante(a: AcaoIA, eventos: List<Evento>): Evento? = when (a.tipo) 
         horario = a.horario ?: "20:00",
         local = a.local.orEmpty(),
         antecedenciaMin = a.antecedenciaMin ?: 60,
-        duracaoMin = a.duracaoMin ?: 60,
+        duracaoMin = a.duracaoMin ?: SEM_FIM,
         // Sem participantes informados, o compromisso é só de quem pediu
         participantes = a.participantes ?: emptySet()
     )

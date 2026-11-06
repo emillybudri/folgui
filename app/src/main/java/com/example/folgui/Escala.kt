@@ -754,16 +754,25 @@ data class Evento(
 ) {
     val momento: Long get() = momentoEm(dia, horario)
 
+    /** A pessoa escolheu só o início: o evento fica sem hora para acabar. */
+    val semFim: Boolean get() = duracaoMin == SEM_FIM
+
     val momentoLembrete: Long? get() = if (antecedenciaMin < 0) null else momento - antecedenciaMin * 60_000L
 
     val jaPassou: Boolean get() = momento <= System.currentTimeMillis()
 
     /** Horário ocupado pelo evento no dia. */
-    val janela: Janela get() = Janela(minutosDoHorario(horario), duracaoMin)
+    val janela: Janela get() = Janela(minutosDoHorario(horario), duracaoReservada(duracaoMin))
 
-    /** "20:00 às 22:00". */
-    val faixaHorario: String get() = "$horario às ${horarioDeMinutos(janela.fim)}"
+    /** "20:00 às 22:00", ou só "20:00" quando não tem fim. */
+    val faixaHorario: String get() = if (semFim) horario else "$horario às ${horarioDeMinutos(janela.fim)}"
 }
+
+/** Duração de um evento que só tem início. */
+const val SEM_FIM = 0
+
+/** Sem fim definido, o evento segura uma hora da agenda para as sugestões não caírem em cima dele. */
+fun duracaoReservada(duracao: Int): Int = if (duracao == SEM_FIM) 60 else duracao
 
 /** Outros eventos que se sobrepõem a [janela] no [dia]. */
 fun eventosEmConflito(eventos: List<Evento>, dia: Int, janela: Janela, ignorarId: Int = 0): List<Evento> =
@@ -785,7 +794,7 @@ fun sugestoesRemarcar(
     diaHoje: Int = hoje(),
     minutoHoje: Int = minutoDoDiaAtual()
 ): List<OpcaoRemarcar> {
-    val duracao = evento.duracaoMin
+    val duracao = evento.janela.duracao
     fun disponivel(dia: Int, inicio: Int): Boolean {
         val janela = Janela(inicio, duracao)
         return (dia != diaHoje || inicio > minutoHoje) &&

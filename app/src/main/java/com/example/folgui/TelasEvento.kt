@@ -152,7 +152,8 @@ fun TelaFormularioEvento(
             // Marcar no horário de sono só com uma confirmação explícita
             val noSono = quemVai.any { it.ehVoce && it.motivoOcupado(dia, rascunho.janela) == TipoBloco.SONO }
             if (noSono) confirmarSono = true else onSalvar(rascunho)
-        } else if (erroTitulo != null || erroData != null || erroHorario != null) {
+        } else if (erroTitulo != null || erroData != null) {
+            // O erro da hora aparece perto do botão: rolar para o topo o esconderia
             scope.launch { rolagem.animateScrollTo(0) }
         }
     }

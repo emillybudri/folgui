@@ -61,6 +61,12 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
+        // Do Android 13 em diante a pessoa pode negar as notificações
+        val negada = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        if (negada) return
+
         NotificationManagerCompat.from(context).notify(id, notification)
     }
 }

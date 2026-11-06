@@ -21,8 +21,10 @@ class MainActivity : ComponentActivity() {
         // Evento a abrir quando o app é aberto pela notificação
         val eventoNotificacao = if (savedInstanceState == null) intent.getIntExtra(EXTRA_EVENTO, 0) else 0
 
+        val modoFacilSalvo = dataStore.data.map { it[CHAVE_MODO_FACIL] == "1" }
+
         setContent {
-            val modoFacil by dataStore.data.map { it[CHAVE_MODO_FACIL] == "1" }.collectAsState(initial = false)
+            val modoFacil by modoFacilSalvo.collectAsState(initial = false)
             FolguiTema {
                 TamanhoDoTexto(modoFacil) {
                     FolguiApp(eventoInicial = eventoNotificacao)

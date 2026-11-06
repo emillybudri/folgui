@@ -106,7 +106,7 @@ class AtividadeTest {
 
     @Test
     fun `copia da conta leva as atividades da pessoa e dos amigos`() {
-        val perfil = Perfil("Eu", TipoEscala.SEMANAL, domingo, null, null, "", voce.padrao, 0, null, listOf(faculdade))
+        val perfil = Perfil("Eu", TipoEscala.SEMANAL, domingo, null, null, voce.padrao, 0, null, listOf(faculdade))
         val amigo = Pessoa(1, "Amigo", TipoEscala.SEMANAL, domingo, voce.padrao, atividades = listOf(plantao))
         val dados = DadosNuvem(perfil, emptyMap(), listOf(amigo), emptyList())
         assertEquals(dados, textoParaDados(dadosParaTexto(dados)))

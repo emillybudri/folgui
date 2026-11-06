@@ -35,7 +35,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -78,7 +77,6 @@ fun TelaFormularioEvento(
     diaSugerido: Int?,
     horaSugerida: Int?,
     participantesSugeridos: Set<Int>?,
-    cidadePadrao: String,
     todas: List<Pessoa>,
     agenda: Map<Int, List<CompromissoAgenda>>,
     feriados: Map<Int, String>,
@@ -109,7 +107,7 @@ fun TelaFormularioEvento(
     var quem by rememberSaveable {
         mutableStateOf(participantesParaTexto(if (inicial != null) inicial.participantes else participantesSugeridos ?: emptySet()))
     }
-    var local by rememberSaveable { mutableStateOf(inicial?.local ?: cidadePadrao) }
+    var local by rememberSaveable { mutableStateOf(inicial?.local ?: "") }
     var antecedencia by rememberSaveable { mutableIntStateOf(inicial?.antecedenciaMin ?: 60) }
     var duracao by rememberSaveable { mutableIntStateOf(inicial?.duracaoMin ?: SEM_FIM) }
     var tentouSalvar by rememberSaveable { mutableStateOf(false) }
@@ -207,7 +205,7 @@ fun TelaFormularioEvento(
                     CampoTexto(
                         valor = local,
                         onValorChange = { local = it.take(60) },
-                        rotulo = "Cidade",
+                        rotulo = "Local (opcional)",
                         icone = Icones.Local,
                         capitalizacao = KeyboardCapitalization.Words,
                         acaoTeclado = ImeAction.Done,
@@ -380,15 +378,8 @@ fun TelaFormularioEvento(
 }
 
 // ============================================================================
-// DETALHE DO EVENTO: disponibilidade, lembrete e previsão do tempo (API REST)
+// DETALHE DO EVENTO: disponibilidade e lembrete
 // ============================================================================
-private sealed interface EstadoPrevisao {
-    data object Carregando : EstadoPrevisao
-    data class Pronta(val previsao: Previsao) : EstadoPrevisao
-    data object CidadeNaoEncontrada : EstadoPrevisao
-    data object Erro : EstadoPrevisao
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TelaDetalheEvento(
@@ -396,7 +387,6 @@ fun TelaDetalheEvento(
     todas: List<Pessoa>,
     eventos: List<Evento>,
     feriados: Map<Int, String>,
-    api: ApiRepository,
     snackbar: SnackbarHostState,
     onVoltar: () -> Unit,
     onEditar: () -> Unit,
@@ -523,9 +513,6 @@ fun TelaDetalheEvento(
                     )
                 }
 
-                if (!atual.jaPassou) {
-                    CartaoPrevisao(evento = atual, api = api, onEditar = onEditar)
-                }
                 Spacer(Modifier.height(Espaco.lg))
             }
         }
@@ -663,101 +650,6 @@ private fun InfoLinha(icone: ImageVector, texto: String, apoio: String? = null) 
             Text(texto, style = MaterialTheme.typography.bodyLarge)
             if (apoio != null) {
                 Text(apoio, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CartaoPrevisao(evento: Evento, api: ApiRepository, onEditar: () -> Unit) {
-    val diasAte = evento.dia - hoje()
-    var tentativa by remember { mutableIntStateOf(0) }
-    var estado by remember { mutableStateOf<EstadoPrevisao>(EstadoPrevisao.Carregando) }
-    val podeConsultar = evento.local.isNotBlank() && diasAte in 0..DIAS_PREVISAO
-
-    LaunchedEffect(evento.local, evento.dia, tentativa) {
-        if (!podeConsultar) return@LaunchedEffect
-        estado = EstadoPrevisao.Carregando
-        estado = try {
-            api.buscarPrevisao(evento.local, evento.dia)
-                ?.let { EstadoPrevisao.Pronta(it) }
-                ?: EstadoPrevisao.CidadeNaoEncontrada
-        } catch (e: Exception) {
-            EstadoPrevisao.Erro
-        }
-    }
-
-    Cartao(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(Espaco.lg), verticalArrangement = Arrangement.spacedBy(Espaco.sm)) {
-            Text("Tempo", style = MaterialTheme.typography.titleSmall)
-
-            val textoApoio: @Composable (String) -> Unit = {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            when {
-                evento.local.isBlank() -> {
-                    textoApoio("Sem cidade")
-                    TextButton(onClick = onEditar) { Text("Adicionar") }
-                }
-                diasAte > DIAS_PREVISAO ->
-                    textoApoio("Disponível em ${diaResumido(evento.dia - DIAS_PREVISAO)}")
-                else -> when (val e = estado) {
-                    EstadoPrevisao.Carregando -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(Espaco.md))
-                        textoApoio("Consultando a previsão…")
-                    }
-                    EstadoPrevisao.CidadeNaoEncontrada -> {
-                        textoApoio("Cidade não encontrada")
-                        TextButton(onClick = onEditar) { Text("Corrigir") }
-                    }
-                    EstadoPrevisao.Erro -> {
-                        textoApoio("Sem conexão")
-                        TextButton(onClick = { tentativa++ }) { Text("Tentar de novo") }
-                    }
-                    is EstadoPrevisao.Pronta -> {
-                        val p = e.previsao
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = iconeTempo(p.codigoTempo),
-                                contentDescription = null,
-                                tint = if (iconeTempo(p.codigoTempo) == Icones.Sol) {
-                                    corAmbar()
-                                } else {
-                                    MaterialTheme.colorScheme.tertiary
-                                },
-                                modifier = Modifier.size(40.dp)
-                            )
-                            Spacer(Modifier.width(Espaco.lg))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = "${p.maxima.roundToInt()}° / ${p.minima.roundToInt()}°",
-                                    style = MaterialTheme.typography.headlineSmall.numerico
-                                )
-                                Text(descricaoTempo(p.codigoTempo), style = MaterialTheme.typography.bodyMedium)
-                            }
-                            if (p.chanceChuva != null) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        "${p.chanceChuva}%",
-                                        style = MaterialTheme.typography.titleMedium.numerico
-                                    )
-                                    Text(
-                                        "de chuva",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = listOf(p.cidade, p.regiao).filter { it.isNotBlank() }.joinToString(", "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
             }
         }
     }

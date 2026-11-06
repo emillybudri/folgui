@@ -251,9 +251,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
     }
 
     // Navega só depois da gravação, para a próxima tela já mostrar os dados novos
-    fun salvarPerfil(pessoa: Pessoa, cidade: String, depois: () -> Unit) {
+    fun salvarPerfil(pessoa: Pessoa, depois: () -> Unit) {
         scope.launch {
-            context.salvarPerfilNasPreferencias(pessoa, cidade)
+            context.salvarPerfilNasPreferencias(pessoa)
             depois()
         }
     }
@@ -292,7 +292,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
         repository.substituirTudo(dados.pessoas, dados.excecoesVoce, dados.eventos)
         dados.eventos.forEach { AlarmScheduler.schedule(context, it) }
         ultimoEnviado = copia.dados
-        salvarPerfil(dados.perfil.comoPessoa(emptyMap()), dados.perfil.cidade) {
+        salvarPerfil(dados.perfil.comoPessoa(emptyMap())) {
             scope.launch {
                 context.dataStore.edit { it[CHAVE_NUVEM_EM] = copia.atualizadoEm.toString() }
                 recarregar()
@@ -406,12 +406,11 @@ fun FolguiApp(eventoInicial: Int = 0) {
 
     fun salvarSono(sono: Turno?) {
         val anterior = voce
-        val cidade = perfil?.cidade ?: ""
-        salvarPerfil(voce.copy(sono = sono), cidade) {}
+        salvarPerfil(voce.copy(sono = sono)) {}
         avisar(
             sono?.let { "Sono das ${it.resumo} salvo." } ?: "Horário de sono removido.",
             acao = "Desfazer"
-        ) { salvarPerfil(anterior, cidade) {} }
+        ) { salvarPerfil(anterior) {} }
     }
 
     /** Salva a nova data e reagenda o lembrete, com opção de desfazer. */
@@ -657,11 +656,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
             repository.atualizarPessoa(nova)
             desfazer.add { repository.atualizarPessoa(antiga) }
         }
-        val cidade = perfil?.cidade ?: ""
         if (voceNovo != voce) {
             val antigo = voce
-            salvarPerfil(voceNovo, cidade) {}
-            desfazer.add { salvarPerfil(antigo, cidade) {} }
+            salvarPerfil(voceNovo) {}
+            desfazer.add { salvarPerfil(antigo) {} }
         }
         recarregar()
         return {
@@ -834,11 +832,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 TelaFormularioEscala(
                     modo = ModoEscala.CONFIGURACAO,
                     inicial = null,
-                    cidadeInicial = "",
                     nomeConta = conta?.nome.orEmpty(),
                     onVoltar = { navController.navigateUp() },
-                    onSalvar = { pessoa, cidade ->
-                        salvarPerfil(pessoa, cidade) {
+                    onSalvar = { pessoa ->
+                        salvarPerfil(pessoa) {
                             irParaInicio()
                             navController.navigate(Rotas.APRESENTACAO)
                         }
@@ -973,15 +970,14 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 TelaFormularioEscala(
                     modo = ModoEscala.PERFIL,
                     inicial = voce,
-                    cidadeInicial = perfil?.cidade ?: "",
                     extraInicio = {
                         if (nuvem.configurada) LinhaConta(conta?.email, entrando, ::entrarComGoogle, ::sairDaConta)
                         LinhaModoFacil(carregado.modoFacil, ::mudarModoFacil)
                         TextButton(onClick = { navController.navigate(Rotas.APRESENTACAO) }) { Text("Ver a apresentação") }
                     },
                     onVoltar = { navController.navigateUp() },
-                    onSalvar = { pessoa, cidade ->
-                        salvarPerfil(pessoa, cidade) {
+                    onSalvar = { pessoa ->
+                        salvarPerfil(pessoa) {
                             navController.navigateUp()
                             avisar("Sua escala foi atualizada.")
                         }
@@ -1006,9 +1002,8 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     TelaFormularioEscala(
                         modo = if (existente == null) ModoEscala.NOVA_PESSOA else ModoEscala.EDITAR_PESSOA,
                         inicial = existente,
-                        cidadeInicial = null,
                         onVoltar = { navController.navigateUp() },
-                        onSalvar = { pessoa, _ -> salvarPessoa(pessoa, existente) },
+                        onSalvar = { pessoa -> salvarPessoa(pessoa, existente) },
                         onExcluir = existente?.let { p -> { excluirPessoa(p) } }
                     )
                 }
@@ -1059,7 +1054,6 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     diaSugerido = dia.takeIf { it >= 0 },
                     horaSugerida = hora.takeIf { it >= 0 },
                     participantesSugeridos = textoParaParticipantes(entry.arguments?.getString("quem") ?: "*"),
-                    cidadePadrao = perfil?.cidade ?: "",
                     todas = todas,
                     agenda = agenda,
                     feriados = feriados,
@@ -1081,7 +1075,6 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     todas = todas,
                     eventos = eventos,
                     feriados = feriados,
-                    api = api,
                     snackbar = snackbar,
                     onVoltar = {
                         // Aberto pela notificação, não há tela anterior: volta para o início

@@ -75,9 +75,8 @@ fun candidatos(escala: TipoEscala, respostas: String): List<Int> {
 fun TelaFormularioEscala(
     modo: ModoEscala,
     inicial: Pessoa?,
-    cidadeInicial: String?,
     onVoltar: () -> Unit,
-    onSalvar: (Pessoa, String) -> Unit,
+    onSalvar: (Pessoa) -> Unit,
     onExcluir: (() -> Unit)? = null,
     /** Aparece embaixo do nome, na primeira etapa. */
     extraInicio: (@Composable () -> Unit)? = null,
@@ -108,7 +107,6 @@ fun TelaFormularioEscala(
     var novaAtividade by rememberSaveable { mutableStateOf<String?>(null) }
     var editandoAtividade by rememberSaveable { mutableIntStateOf(-1) }
     var email by rememberSaveable { mutableStateOf(inicial?.email ?: "") }
-    var cidade by rememberSaveable { mutableStateOf(cidadeInicial ?: "") }
     var codigoEscala by rememberSaveable { mutableStateOf(escalaInicial.codigo) }
 
     var aInicio by rememberSaveable { mutableIntStateOf(turnoAInicial.inicio) }
@@ -240,7 +238,7 @@ fun TelaFormularioEscala(
                 etapa = invalida
                 tentouAvancar = true
             } else {
-                onSalvar(previa, cidade.trim())
+                onSalvar(previa)
             }
         }
     }
@@ -277,10 +275,9 @@ fun TelaFormularioEscala(
         TelaFormularioEscala(
             modo = ModoEscala.ATIVIDADE,
             inicial = atividadeAberta?.comoPessoa(),
-            cidadeInicial = null,
             tipoAtividade = tipoAberto,
             onVoltar = ::fechar,
-            onSalvar = { p, _ ->
+            onSalvar = { p ->
                 val nova = Atividade(tipoAberto, p.nome, p.escala, p.inicioCiclo, p.padrao)
                 val lista = if (atividadeAberta == null) {
                     atividades + nova
@@ -509,7 +506,6 @@ fun TelaFormularioEscala(
                                     onDormir = { dormir = it },
                                     onAcordar = { acordar = it }
                                 )
-                                SecaoCidade(cidade = cidade, onCidade = { cidade = it })
                             }
 
                             if (onExcluir != null) {

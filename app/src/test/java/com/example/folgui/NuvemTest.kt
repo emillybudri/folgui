@@ -15,7 +15,6 @@ class NuvemTest {
         inicioCiclo = dia,
         feriasInicio = dia + 30,
         feriasFim = dia + 40,
-        cidade = "Campinas",
         padrao = listOf(Turno(420, 1140), null),
         descansoMin = 60,
         sono = Turno(1380, 420)

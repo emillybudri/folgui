@@ -19,7 +19,6 @@ private val CHAVE_ESCALA = stringPreferencesKey("escala")
 private val CHAVE_INICIO = stringPreferencesKey("inicio_ciclo")
 private val CHAVE_FERIAS_INICIO = stringPreferencesKey("ferias_inicio")
 private val CHAVE_FERIAS_FIM = stringPreferencesKey("ferias_fim")
-private val CHAVE_CIDADE = stringPreferencesKey("cidade")
 val CHAVE_AGENDA = stringPreferencesKey("google_agenda")
 private val CHAVE_DIAS_SEMANA = stringPreferencesKey("dias_semana")
 private val CHAVE_TURNO_INICIO = stringPreferencesKey("turno_inicio")
@@ -39,7 +38,6 @@ data class Perfil(
     val inicioCiclo: Int,
     val feriasInicio: Int?,
     val feriasFim: Int?,
-    val cidade: String,
     val padrao: List<Turno?>,
     val descansoMin: Int,
     val sono: Turno?,
@@ -86,7 +84,6 @@ private fun lerPerfil(prefs: Preferences): Perfil? {
         inicioCiclo = inicio,
         feriasInicio = textoParaDia(prefs[CHAVE_FERIAS_INICIO] ?: ""),
         feriasFim = textoParaDia(prefs[CHAVE_FERIAS_FIM] ?: ""),
-        cidade = prefs[CHAVE_CIDADE] ?: "",
         // Perfis da versão anterior guardavam só um turno: monta o ciclo a partir dele
         padrao = textoParaPadrao(prefs[CHAVE_PADRAO] ?: "") ?: padraoLegado(
             escala,
@@ -112,7 +109,7 @@ fun lerEstado(prefs: Preferences) = EstadoPerfil(
 )
 
 /** Grava a escala do usuário nas preferências. */
-suspend fun Context.salvarPerfilNasPreferencias(pessoa: Pessoa, cidade: String) {
+suspend fun Context.salvarPerfilNasPreferencias(pessoa: Pessoa) {
     val turnoPrincipal = pessoa.turnos.firstOrNull() ?: pessoa.escala.turnoPadrao
     dataStore.edit { prefs ->
         prefs[CHAVE_NOME] = pessoa.nome
@@ -120,7 +117,6 @@ suspend fun Context.salvarPerfilNasPreferencias(pessoa: Pessoa, cidade: String) 
         prefs[CHAVE_INICIO] = diaParaTexto(pessoa.inicioCiclo)
         prefs[CHAVE_FERIAS_INICIO] = pessoa.feriasInicio?.let(::diaParaTexto) ?: ""
         prefs[CHAVE_FERIAS_FIM] = pessoa.feriasFim?.let(::diaParaTexto) ?: ""
-        prefs[CHAVE_CIDADE] = cidade
         prefs[CHAVE_DIAS_SEMANA] = pessoa.diasSemana.toString()
         prefs[CHAVE_TURNO_INICIO] = turnoPrincipal.inicio.toString()
         prefs[CHAVE_TURNO_FIM] = turnoPrincipal.fim.toString()

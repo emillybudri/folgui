@@ -342,11 +342,6 @@ object Icones {
             "M20,10.5v2h3v-2h-3zM12,5.5c-3.31,0 -6,2.69 -6,6s2.69,6 6,6 6,-2.69 6,-6 -2.69,-6 -6,-6z" +
             "M11,22.45h2V19.5h-2v2.95zM3.55,18.54l1.41,1.41 1.79,-1.8 -1.41,-1.41 -1.79,1.8z"
     )
-    val Nuvem = icone(
-        "M19.35,10.04C18.67,6.59 15.64,4 12,4 9.11,4 6.6,5.64 5.35,8.04 2.34,8.36 0,10.91 0,14" +
-            "c0,3.31 2.69,6 6,6h13c2.76,0 5,-2.24 5,-5 0,-2.64 -2.05,-4.78 -4.65,-4.96z"
-    )
-    val Gota = icone("M12,2c-5.33,4.55 -8,8.48 -8,11.8c0,4.98 3.8,8.2 8,8.2s8,-3.22 8,-8.2C20,10.48 17.33,6.55 12,2z")
     val Email = icone(
         "M20,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2z" +
             "M20,8l-8,5 -8,-5V6l8,5 8,-5v2z"
@@ -395,8 +390,3 @@ object Icones {
         ).addPath(pathData = addPathNodes(caminho), fill = SolidColor(Color.Black)).build()
 }
 
-fun iconeTempo(codigo: Int): ImageVector = when (codigo) {
-    0, 1 -> Icones.Sol
-    2, 3, 45, 48 -> Icones.Nuvem
-    else -> Icones.Gota
-}

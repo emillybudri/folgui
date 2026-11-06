@@ -480,22 +480,6 @@ fun SecaoFeriados(folga: Boolean, onMudar: (Boolean) -> Unit) {
 }
 
 @Composable
-fun SecaoCidade(cidade: String, onCidade: (String) -> Unit) {
-    Secao("Cidade") {
-        CampoTexto(
-            valor = cidade,
-            onValorChange = { onCidade(it.take(60)) },
-            rotulo = "Sua cidade",
-            placeholder = "Ex.: Campinas",
-            icone = Icones.Local,
-            capitalizacao = KeyboardCapitalization.Words,
-            acaoTeclado = ImeAction.Done,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
 fun BotaoRemover(nome: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,

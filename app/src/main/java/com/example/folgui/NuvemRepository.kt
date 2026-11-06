@@ -104,7 +104,6 @@ fun dadosParaTexto(dados: DadosNuvem): String {
         .put("inicio", diaParaTexto(p.inicioCiclo))
         .put("feriasInicio", p.feriasInicio?.let(::diaParaTexto) ?: "")
         .put("feriasFim", p.feriasFim?.let(::diaParaTexto) ?: "")
-        .put("cidade", p.cidade)
         .put("padrao", padraoParaTexto(p.padrao))
         .put("descanso", p.descansoMin)
         .put("sono", p.sono?.codigo ?: "")
@@ -163,7 +162,6 @@ fun textoParaDados(texto: String): DadosNuvem? = try {
         inicioCiclo = textoParaDia(p.getString("inicio")) ?: error("início inválido"),
         feriasInicio = textoParaDia(p.getString("feriasInicio")),
         feriasFim = textoParaDia(p.getString("feriasFim")),
-        cidade = p.getString("cidade"),
         padrao = textoParaPadrao(p.getString("padrao")) ?: error("ciclo inválido"),
         descansoMin = p.getInt("descanso"),
         sono = Turno.deCodigo(p.getString("sono")),

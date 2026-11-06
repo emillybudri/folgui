@@ -36,7 +36,7 @@ data class DadosNuvem(
 
 // ---------- Conversão para texto (o id da Google Agenda fica de fora: ele só vale em cada aparelho) ----------
 
-private fun excecoesParaJson(excecoes: Map<Int, Excecao>) = JSONArray().apply {
+fun excecoesParaJson(excecoes: Map<Int, Excecao>) = JSONArray().apply {
     excecoes.values.sortedBy { it.dia }.forEach { e ->
         put(
             JSONObject()
@@ -47,7 +47,7 @@ private fun excecoesParaJson(excecoes: Map<Int, Excecao>) = JSONArray().apply {
     }
 }
 
-private fun jsonParaExcecoes(lista: JSONArray): Map<Int, Excecao> {
+fun jsonParaExcecoes(lista: JSONArray): Map<Int, Excecao> {
     val mapa = mutableMapOf<Int, Excecao>()
     for (i in 0 until lista.length()) {
         val o = lista.getJSONObject(i)
@@ -121,6 +121,7 @@ fun dadosParaTexto(dados: DadosNuvem): String {
                     .put("feriasInicio", q.feriasInicio?.let(::diaParaTexto) ?: "")
                     .put("feriasFim", q.feriasFim?.let(::diaParaTexto) ?: "")
                     .put("email", q.email)
+                    .put("amigoUid", q.amigoUid)
                     .put("padrao", padraoParaTexto(q.padrao))
                     .put("descanso", q.descansoMin)
                     .put("excecoes", excecoesParaJson(q.excecoes))
@@ -181,6 +182,7 @@ fun textoParaDados(texto: String): DadosNuvem? = try {
             feriasInicio = textoParaDia(o.getString("feriasInicio")),
             feriasFim = textoParaDia(o.getString("feriasFim")),
             email = o.getString("email"),
+            amigoUid = o.optString("amigoUid"),
             descansoMin = o.getInt("descanso"),
             excecoes = jsonParaExcecoes(o.getJSONArray("excecoes")),
             atividades = textoParaAtividades(o.optString("atividades"))

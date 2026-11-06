@@ -1,9 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Cada pessoa só lê e grava o próprio documento
+    function logado() {
+      return request.auth != null;
+    }
+    function dono(uid) {
+      return logado() && request.auth.uid == uid;
+    }
+    function amigoDe(uid) {
+      return logado() && exists(/databases/$(database)/documents/perfis/$(uid)/amigos/$(request.auth.uid));
+    }
+
+    // Cópia completa dos dados: cada pessoa só lê e grava o próprio documento
     match /usuarios/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if dono(uid);
+    }
+
+    // Um código aponta para uma conta. Dá para abrir um código, mas não listar todos,
+    // e um código criado nunca muda de dono
+    match /codigos/{codigo} {
+      allow get: if logado();
+      allow create: if logado() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Só a escala, para quem é amigo
+    match /perfis/{uid} {
+      allow get: if dono(uid) || amigoDe(uid);
+      allow write: if dono(uid);
+
+      // Entrar na lista de um amigo exige o código dele
+      match /amigos/{amigo} {
+        allow read: if dono(uid);
+        allow create: if dono(uid) || (
+          dono(amigo) &&
+          get(/databases/$(database)/documents/codigos/$(request.resource.data.codigo)).data.uid == uid
+        );
+        allow delete: if dono(uid) || dono(amigo);
+      }
+
+      // Só amigos mandam convites, sempre em nome da própria conta
+      match /convites/{convite} {
+        allow read, delete: if dono(uid);
+        allow create: if amigoDe(uid) && request.resource.data.de == request.auth.uid;
+      }
     }
   }
 }

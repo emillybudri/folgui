@@ -21,6 +21,7 @@ class FolguiRepository(context: Context) {
         put("padrao", padraoParaTexto(pessoa.padrao))
         put("descanso_min", pessoa.descansoMin)
         put("atividades", atividadesParaTexto(pessoa.atividades))
+        put("amigo_uid", pessoa.amigoUid)
     }
 
     /** Retorna o id gerado (ou -1). Com [manterId], reaproveita o id (usado no "Desfazer"). */
@@ -68,7 +69,8 @@ class FolguiRepository(context: Context) {
                         email = c.texto("email"),
                         descansoMin = c.getInt(c.getColumnIndexOrThrow("descanso_min")),
                         excecoes = excecoes[id].orEmpty(),
-                        atividades = textoParaAtividades(c.texto("atividades"))
+                        atividades = textoParaAtividades(c.texto("atividades")),
+                        amigoUid = c.texto("amigo_uid")
                     )
                 )
             }
@@ -93,6 +95,12 @@ class FolguiRepository(context: Context) {
         helper.writableDatabase.delete(
             "excecao", "pessoa_id = ? AND data = ?", arrayOf(pessoaId.toString(), diaParaTexto(dia))
         )
+    }
+
+    /** Troca todas as mudanças da pessoa, usado quando as de um amigo chegam da conta dele. */
+    fun substituirExcecoes(pessoaId: Int, excecoes: Map<Int, Excecao>) {
+        helper.writableDatabase.delete("excecao", "pessoa_id = ?", arrayOf(pessoaId.toString()))
+        excecoes.values.forEach { salvarExcecao(pessoaId, it) }
     }
 
     /** Mudanças de todas as pessoas, por id da pessoa e por dia. */

@@ -85,6 +85,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
     val api = remember { ApiRepository() }
     val agendaRepository = remember { AgendaRepository(context) }
     val nuvem = remember { NuvemRepository() }
+    val amigos = remember { AmigosRepository() }
 
     // O login vem antes de tudo; sem o Firebase configurado, o app abre sem conta
     val destinoInicial = remember {
@@ -425,7 +426,21 @@ fun FolguiApp(eventoInicial: Int = 0) {
         avisar("Remarcado para ${diaResumido(depois.dia)} às ${depois.horario}.", acao = "Desfazer") { gravar(antes) }
     }
 
-    fun salvarEvento(evento: Evento): Boolean {
+    /** Manda o evento para os amigos escolhidos, que aceitam ou recusam no app deles. */
+    fun convidarAmigos(evento: Evento) {
+        val convidados = amigosDoEvento(evento, pessoas)
+        if (convidados.isEmpty() || conta == null) return
+        scope.launch {
+            try {
+                convidados.forEach { amigos.enviarConvite(it, evento, voce.nome) }
+                avisar("Convite enviado para ${convidados.joinToString(", ") { it.nome }}.")
+            } catch (e: Exception) {
+                avisar("Salvo, mas não consegui enviar o convite.")
+            }
+        }
+    }
+
+    fun salvarEvento(evento: Evento, convidar: Boolean = true): Boolean {
         val id = if (evento.id == 0) {
             repository.inserirEvento(evento)
         } else {
@@ -439,6 +454,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
         val agendado = AlarmScheduler.schedule(context, salvo)
         val naAgenda = sincronizarAgenda(salvo)
         recarregar()
+        if (evento.id == 0 && convidar) convidarAmigos(salvo)
 
         if (agendado && !NotificationHelper.temPermissao(context) && Build.VERSION.SDK_INT >= 33) {
             if (aguardandoAgenda.isEmpty()) {
@@ -580,6 +596,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
                         val criado = novo.copy(id = id)
                         AlarmScheduler.schedule(context, criado)
                         sincronizarAgenda(criado)
+                        convidarAmigos(criado)
                         desfazer.add {
                             AlarmScheduler.cancel(context, id)
                             tirarDaAgenda(criado)
@@ -691,6 +708,76 @@ fun FolguiApp(eventoInicial: Int = 0) {
         }
     }
 
+    // Amigos conectados: publica a sua escala, traz a deles e busca os convites
+    var codigoAmigo by remember { mutableStateOf<String?>(null) }
+    val convites = remember { mutableStateListOf<Convite>() }
+    var adicionandoAmigo by rememberSaveable { mutableStateOf(false) }
+    var conectandoAmigo by remember { mutableStateOf(false) }
+    var erroAmigo by remember { mutableStateOf<String?>(null) }
+
+    suspend fun sincronizarAmigos() {
+        if (conta == null || perfil == null) return
+        val situacao = amigos.sincronizar(voce, repository)
+        codigoAmigo = situacao.codigo
+        convites.clear()
+        convites.addAll(situacao.convites)
+        if (situacao.mudou) recarregar()
+    }
+
+    LaunchedEffect(conta, rotaAtual, voce) {
+        try {
+            sincronizarAmigos()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Sem internet: as escalas guardadas no aparelho continuam valendo
+        }
+    }
+
+    fun conectarAmigo(codigo: String) {
+        conectandoAmigo = true
+        erroAmigo = null
+        scope.launch {
+            try {
+                amigos.adicionar(codigo)
+                sincronizarAmigos()
+                adicionandoAmigo = false
+                avisar("Amigo conectado!")
+            } catch (e: ErroAmigo) {
+                erroAmigo = e.message
+            } catch (e: Exception) {
+                erroAmigo = "Não consegui conectar. Veja a internet."
+            }
+            conectandoAmigo = false
+        }
+    }
+
+    fun desconectarAmigo(amigo: Pessoa) {
+        scope.launch {
+            try {
+                amigos.remover(amigo.amigoUid)
+                repository.excluirPessoa(amigo.id)
+                recarregar()
+                navController.navigateUp()
+                avisar("Você desconectou de ${amigo.nome}.")
+            } catch (e: Exception) {
+                avisar("Não consegui desconectar. Veja a internet.")
+            }
+        }
+    }
+
+    fun responderConvite(convite: Convite, aceitar: Boolean) {
+        if (aceitar) salvarEvento(eventoDoConvite(convite, pessoas), convidar = false)
+        convites.remove(convite)
+        scope.launch {
+            try {
+                amigos.apagarConvite(convite.id)
+            } catch (e: Exception) {
+                // Na próxima sincronização o convite volta a aparecer
+            }
+        }
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -770,7 +857,9 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     pessoas = pessoas,
                     eventos = eventos,
                     feriados = feriados,
+                    convites = convites,
                     snackbar = snackbar,
+                    onResponderConvite = ::responderConvite,
                     onResponderFeriado = ::responderFeriado,
                     onAbrirDia = { navController.navigate(Rotas.dia(it)) },
                     onAbrirEvento = { navController.navigate(Rotas.evento(it)) },
@@ -817,6 +906,21 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     voce = voce,
                     pessoas = pessoas,
                     snackbar = snackbar,
+                    cartaoAmigos = { modifier ->
+                        if (nuvem.configurada) {
+                            CartaoAmigos(
+                                temConta = conta != null,
+                                codigo = codigoAmigo,
+                                onEntrar = ::entrarComGoogle,
+                                onCompartilhar = { compartilharCodigo(context, it) },
+                                onAdicionar = {
+                                    erroAmigo = null
+                                    adicionandoAmigo = true
+                                },
+                                modifier = modifier
+                            )
+                        }
+                    },
                     onAbrirPerfil = { navController.navigate(Rotas.PERFIL) },
                     onAbrirPessoa = { navController.navigate(Rotas.pessoa(it)) },
                     onNovaPessoa = { navController.navigate(Rotas.pessoa(0)) }
@@ -888,14 +992,22 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 val id = entry.arguments?.getInt("id") ?: 0
                 // Valor fixado na entrada: a tela não muda de modo enquanto sai após salvar ou excluir
                 val existente = remember { pessoas.firstOrNull { it.id == id } }
-                TelaFormularioEscala(
-                    modo = if (existente == null) ModoEscala.NOVA_PESSOA else ModoEscala.EDITAR_PESSOA,
-                    inicial = existente,
-                    cidadeInicial = null,
-                    onVoltar = { navController.navigateUp() },
-                    onSalvar = { pessoa, _ -> salvarPessoa(pessoa, existente) },
-                    onExcluir = existente?.let { p -> { excluirPessoa(p) } }
-                )
+                if (existente != null && existente.amigoUid.isNotEmpty()) {
+                    TelaAmigo(
+                        amigo = existente,
+                        onVoltar = { navController.navigateUp() },
+                        onDesfazer = { desconectarAmigo(existente) }
+                    )
+                } else {
+                    TelaFormularioEscala(
+                        modo = if (existente == null) ModoEscala.NOVA_PESSOA else ModoEscala.EDITAR_PESSOA,
+                        inicial = existente,
+                        cidadeInicial = null,
+                        onVoltar = { navController.navigateUp() },
+                        onSalvar = { pessoa, _ -> salvarPessoa(pessoa, existente) },
+                        onExcluir = existente?.let { p -> { excluirPessoa(p) } }
+                    )
+                }
             }
 
             composable(
@@ -994,6 +1106,15 @@ fun FolguiApp(eventoInicial: Int = 0) {
                 nuvemPronta = true
                 sairDoLogin()
             }
+        )
+    }
+
+    if (adicionandoAmigo) {
+        DialogoCodigoAmigo(
+            erro = erroAmigo,
+            ocupado = conectandoAmigo,
+            onConfirmar = ::conectarAmigo,
+            onFechar = { adicionandoAmigo = false }
         )
     }
 

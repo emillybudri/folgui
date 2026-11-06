@@ -107,7 +107,7 @@ fun TelaFormularioEvento(
     var temHorario by rememberSaveable { mutableStateOf(inicial != null || horaSugerida != null) }
     // Quem vai: "*" = todas as pessoas; senão, os ids separados por vírgula
     var quem by rememberSaveable {
-        mutableStateOf(participantesParaTexto(if (inicial != null) inicial.participantes else participantesSugeridos))
+        mutableStateOf(participantesParaTexto(if (inicial != null) inicial.participantes else participantesSugeridos ?: emptySet()))
     }
     var local by rememberSaveable { mutableStateOf(inicial?.local ?: cidadePadrao) }
     var antecedencia by rememberSaveable { mutableIntStateOf(inicial?.antecedenciaMin ?: 60) }

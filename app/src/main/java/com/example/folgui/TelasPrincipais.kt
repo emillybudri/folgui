@@ -56,7 +56,9 @@ fun TelaInicio(
     pessoas: List<Pessoa>,
     eventos: List<Evento>,
     feriados: Map<Int, String>,
+    convites: List<Convite>,
     snackbar: SnackbarHostState,
+    onResponderConvite: (Convite, Boolean) -> Unit,
     onResponderFeriado: (Int, Boolean) -> Unit,
     onAbrirDia: (Int) -> Unit,
     onAbrirEvento: (Int) -> Unit,
@@ -105,6 +107,10 @@ fun TelaInicio(
         ) {
             item(key = "hoje") {
                 CartaoHoje(voce, feriados[diaHoje], { onAbrirDia(diaHoje) }, margem)
+            }
+
+            items(convites, key = { it.id }) { c ->
+                CartaoConvite(c, { onResponderConvite(c, true) }, { onResponderConvite(c, false) }, margem)
             }
 
             if (feriadoSemResposta != null) {
@@ -517,6 +523,7 @@ fun TelaPessoas(
     voce: Pessoa,
     pessoas: List<Pessoa>,
     snackbar: SnackbarHostState,
+    cartaoAmigos: @Composable (Modifier) -> Unit,
     onAbrirPerfil: () -> Unit,
     onAbrirPessoa: (Int) -> Unit,
     onNovaPessoa: () -> Unit
@@ -529,7 +536,7 @@ fun TelaPessoas(
             ExtendedFloatingActionButton(
                 onClick = onNovaPessoa,
                 icon = { Icon(Icones.Adicionar, contentDescription = null) },
-                text = { Text("Pessoa") }
+                text = { Text("Sem o app") }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }
@@ -550,6 +557,14 @@ fun TelaPessoas(
                 ) {
                     LinhaPessoa(pessoa = voce, dia = diaHoje, detalhe = voce.resumoEscala, onClick = onAbrirPerfil)
                 }
+            }
+
+            item(key = "amigos") {
+                cartaoAmigos(
+                    Modifier
+                        .limitarLargura()
+                        .padding(horizontal = Espaco.lg)
+                )
             }
 
             if (pessoas.isEmpty()) {
@@ -573,7 +588,7 @@ fun TelaPessoas(
                         LinhaPessoa(
                             pessoa = pessoa,
                             dia = diaHoje,
-                            detalhe = pessoa.resumoEscala,
+                            detalhe = if (pessoa.amigoUid.isEmpty()) pessoa.resumoEscala else "No Folgui · ${pessoa.resumoEscala}",
                             onClick = { onAbrirPessoa(pessoa.id) }
                         )
                     }

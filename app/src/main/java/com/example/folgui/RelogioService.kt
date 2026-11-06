@@ -74,6 +74,22 @@ class RelogioService : WearableListenerService() {
         return respostaParaRelogio(conferida)
     }
 
+    /** Avisa os amigos escolhidos. Se falhar, o evento continua marcado: o convite é um extra. */
+    private suspend fun convidarAmigos(eventos: List<Evento>, pessoas: List<Pessoa>, meuNome: String): List<String> {
+        if (BuildConfig.GOOGLE_WEB_CLIENT.isEmpty()) return emptyList()
+        val amigos = AmigosRepository()
+        return try {
+            eventos.flatMap { evento ->
+                amigosDoEvento(evento, pessoas).map { amigo ->
+                    amigos.enviarConvite(amigo, evento, meuNome)
+                    amigo.nome
+                }
+            }.distinct()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     private suspend fun marcar(): RespostaRelogio {
         val acoes = conversa.retirarProposta(System.currentTimeMillis())
         if (acoes.isEmpty()) {
@@ -100,9 +116,11 @@ class RelogioService : WearableListenerService() {
             return RespostaRelogio(TipoRespostaRelogio.ERRO, "Não consegui salvar. Tente pelo celular.")
         }
         mudancasDoRelogio.value++
+        val convidados = convidarAmigos(marcados, repository.listarPessoas(), estado.perfil?.nome.orEmpty())
         return RespostaRelogio(
             TipoRespostaRelogio.MARCADO,
-            marcados.joinToString("\n") { "${it.titulo}, ${diaResumido(it.dia)}, ${it.faixaHorario}" }
+            marcados.joinToString("\n") { "${it.titulo}, ${diaResumido(it.dia)}, ${it.faixaHorario}" } +
+                if (convidados.isEmpty()) "" else "\nConvite para ${convidados.joinToString(", ")}"
         )
     }
 }

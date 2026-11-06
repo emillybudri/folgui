@@ -281,7 +281,9 @@ data class Pessoa(
     /** Outro emprego, faculdade e afins, além da escala principal. */
     val atividades: List<Atividade> = emptyList(),
     /** A empresa costuma folgar em feriados? Se não, o app nem pergunta. */
-    val folgaFeriados: Boolean = true
+    val folgaFeriados: Boolean = true,
+    /** Conta do amigo que também usa o app (vazio = pessoa cadastrada à mão). */
+    val amigoUid: String = ""
 ) {
     val ehVoce: Boolean get() = id == ID_VOCE
 

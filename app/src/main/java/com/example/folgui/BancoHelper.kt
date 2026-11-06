@@ -26,7 +26,8 @@ class BancoHelper(context: Context) : SQLiteOpenHelper(
                 turno_fim INTEGER NOT NULL DEFAULT 1020,
                 padrao TEXT NOT NULL DEFAULT '',
                 descanso_min INTEGER NOT NULL DEFAULT 0,
-                atividades TEXT NOT NULL DEFAULT ''
+                atividades TEXT NOT NULL DEFAULT '',
+                amigo_uid TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent()
         )
@@ -108,10 +109,14 @@ class BancoHelper(context: Context) : SQLiteOpenHelper(
         if (oldVersion < 6) {
             db.execSQL("ALTER TABLE pessoa ADD COLUMN atividades TEXT NOT NULL DEFAULT ''")
         }
+        // Versão 7: amigos conectados pelo código, que têm a escala vinda da conta deles
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE pessoa ADD COLUMN amigo_uid TEXT NOT NULL DEFAULT ''")
+        }
     }
 
     companion object {
         private const val DATABASE_NAME = "folgui.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
     }
 }

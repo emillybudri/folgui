@@ -496,7 +496,16 @@ fun TelaFormularioEscala(
                                     temSono = temSono,
                                     dormir = dormir,
                                     acordar = acordar,
-                                    onTemSono = { temSono = it },
+                                    turnos = previa.todosTurnos,
+                                    onTemSono = { ligado ->
+                                        temSono = ligado
+                                        // Já começa de acordo com o horário de trabalho informado
+                                        if (ligado) {
+                                            val sugestao = sonoSugerido(previa.todosTurnos)
+                                            dormir = sugestao.inicio
+                                            acordar = sugestao.fim
+                                        }
+                                    },
                                     onDormir = { dormir = it },
                                     onAcordar = { acordar = it }
                                 )

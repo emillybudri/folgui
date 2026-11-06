@@ -276,7 +276,7 @@ private val INSTRUCOES = """
     {"tipo":"criar_evento","titulo":"...","dia":"...","horario":"15:00","duracao_min":60,"local":"","participantes":[ids de quem vai além dela; omita se for só ela],"lembrete_min":60}
     {"tipo":"editar_evento","evento_id":1, e só os campos que mudam: "titulo","dia","horario","duracao_min","local","participantes","lembrete_min"} (é assim que se remarca qualquer evento que tenha evento_id)
     {"tipo":"excluir_evento","evento_id":1}
-    {"tipo":"sono","entrada":"23:00","saida":"07:00"} (hora de dormir e de acordar)
+    {"tipo":"sono","entrada":"23:00","saida":"07:00"} (hora de dormir e de acordar; a pessoa precisa acordar antes de entrar no trabalho)
     {"tipo":"ferias","pessoa_id":-1,"inicio":"...","fim":"..."} | {"tipo":"remover_ferias","pessoa_id":-1}
     {"tipo":"folga","pessoa_id":-1,"dia":"..."} (folga em dia de trabalho) | {"tipo":"ausencia","pessoa_id":-1,"dia":"..."} (atestado ou falta)
     {"tipo":"trabalho","pessoa_id":-1,"dia":"...","entrada":"08:00","saida":"14:00"} (trabalho em dia de folga)
@@ -481,6 +481,9 @@ fun verificarAcoes(acoes: List<AcaoIA>, todas: List<Pessoa>, eventos: List<Event
             }
             TipoAcaoIA.HORARIO -> if (pessoa != null && dia != null && pessoa.turnoPelaEscala(dia) == null) {
                 avisos.add("${diaResumido(dia)} é folga na escala de ${pessoa.nomeCurto}.")
+            }
+            TipoAcaoIA.SONO -> a.turno?.let { sono ->
+                todas.firstOrNull { it.ehVoce }?.let { avisoSono(sono, it.todosTurnos) }?.let(avisos::add)
             }
             TipoAcaoIA.FERIAS -> if (pessoa?.temFerias == true) {
                 avisos.add("Isso substitui as férias já cadastradas de ${pessoa.nomeCurto}.")

@@ -982,6 +982,7 @@ fun FolguiApp(eventoInicial: Int = 0) {
     if (editandoSono) {
         DialogoSono(
             sono = voce.sono,
+            turnos = voce.todosTurnos,
             onSalvar = {
                 editandoSono = false
                 salvarSono(it)

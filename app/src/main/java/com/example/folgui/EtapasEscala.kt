@@ -439,13 +439,14 @@ fun SecaoSono(
     temSono: Boolean,
     dormir: Int,
     acordar: Int,
+    turnos: List<Turno>,
     onTemSono: (Boolean) -> Unit,
     onDormir: (Int) -> Unit,
     onAcordar: (Int) -> Unit
 ) {
     Secao("Sono") {
         if (temSono) {
-            CamposSono(dormir, acordar, onDormir = onDormir, onAcordar = onAcordar)
+            CamposSono(dormir, acordar, turnos, onDormir = onDormir, onAcordar = onAcordar)
             TextButton(onClick = { onTemSono(false) }) { Text("Remover") }
         } else {
             OutlinedButton(

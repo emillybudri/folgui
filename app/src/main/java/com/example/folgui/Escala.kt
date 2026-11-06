@@ -550,6 +550,52 @@ fun melhoresDias(
         .take(quantidade)
         .map { it.first }
 
+/** Horário de quem ainda não tem nenhum turno cadastrado. */
+val SONO_PADRAO = Turno(23 * 60, 7 * 60)
+
+private const val HORAS_SONO_MIN = 8 * 60
+
+/** Tempo para se arrumar e chegar: acordar menos que isso antes de entrar não dá. */
+private const val PREPARO_MIN = 60
+
+/** Margem que o aviso aceita entre acordar e entrar no trabalho. */
+private const val MARGEM_ACORDAR_MIN = 30
+
+/** Os dois trechos se cruzam em algum momento, inclusive virando a meia-noite? */
+private fun Turno.sobrepoe(outro: Turno): Boolean = listOf(-MINUTOS_DIA, 0, MINUTOS_DIA).any { desvio ->
+    val comeco = inicio + desvio
+    comeco < outro.inicio + outro.duracao && outro.inicio < comeco + duracao
+}
+
+/** Todos os horários da pessoa: a escala e as outras atividades. */
+val Pessoa.todosTurnos: List<Turno>
+    get() = (turnos + atividades.flatMap { it.padrao.filterNotNull() }).distinct()
+
+/**
+ * Oito horas de sono que combinam com o trabalho: acorda uma hora antes de entrar.
+ * Quem só trabalha à noite dorme depois de sair; quem sai tarde dorme depois do turno.
+ */
+fun sonoSugerido(turnos: List<Turno>): Turno {
+    fun depoisDe(saida: Int) = Turno(Math.floorMod(saida + PREPARO_MIN, MINUTOS_DIA), Math.floorMod(saida + PREPARO_MIN + HORAS_SONO_MIN, MINUTOS_DIA))
+
+    if (turnos.isEmpty()) return SONO_PADRAO
+    // O plantão de 24h começa de manhã: quem faz plantão acorda antes dele, como no turno de dia
+    val deDia = turnos.filter { !it.noturno || it.duracao == MINUTOS_DIA }
+    if (deDia.isEmpty()) return depoisDe(turnos.minOf { it.fim })
+
+    val acordar = minOf(SONO_PADRAO.fim, deDia.minOf { it.inicio } - PREPARO_MIN)
+    val sono = Turno(Math.floorMod(acordar - HORAS_SONO_MIN, MINUTOS_DIA), Math.floorMod(acordar, MINUTOS_DIA))
+    val conflito = turnos.firstOrNull { it.duracao < MINUTOS_DIA && it.sobrepoe(sono) }
+    return if (conflito != null) depoisDe(conflito.fim) else sono
+}
+
+/** Frase de alerta quando o sono cai no horário de trabalho ou termina em cima da entrada. */
+fun avisoSono(sono: Turno, turnos: List<Turno>): String? {
+    val comMargem = Turno(sono.inicio, Math.floorMod(sono.fim + MARGEM_ACORDAR_MIN, MINUTOS_DIA))
+    val turno = turnos.firstOrNull { it.sobrepoe(comMargem) } ?: return null
+    return "Você entra às ${horaCurta(turno.inicio)}, mas acordaria às ${horaCurta(sono.fim)}."
+}
+
 /** Faltando quantos dias o feriado aparece na tela inicial. */
 const val DIAS_AVISO_FERIADO = 7
 

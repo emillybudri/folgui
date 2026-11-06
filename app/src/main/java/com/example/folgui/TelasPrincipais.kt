@@ -65,17 +65,28 @@ fun TelaInicio(
     onPlanejar: (Encontro) -> Unit,
     onQuandoDa: () -> Unit,
     onVerPessoas: () -> Unit,
-    onEditarSono: () -> Unit
+    onPerguntarIA: () -> Unit
 ) {
     val diaHoje = hoje()
     val todas = listOf(voce) + pessoas
-    val folgas = diasEmComum(todas, diaHoje + 1, quantidade = 8)
     val proximoEvento = eventos.firstOrNull { !it.jaPassou }
     // Melhor próximo horário com todo mundo livre (pelo menos 2 horas)
     val encontro = remember(todas) {
         if (pessoas.isEmpty()) null else proximosEncontros(todas, duracao = 120, quantidade = 1).firstOrNull()
     }
     val feriadoSemResposta = voce.feriadoParaPerguntar(feriados.keys, diaHoje)
+    val atalhos = atalhosDoInicio(voce, pessoas, eventos, feriados, encontro, diaHoje)
+
+    fun abrirAtalho(atalho: Atalho) {
+        when (atalho.tipo) {
+            TipoAtalho.ENCONTRO -> atalho.encontro?.let(onPlanejar)
+            TipoAtalho.CHAMAR_AMIGO -> onVerPessoas()
+            TipoAtalho.PLANEJAR_FOLGA -> onNovoEvento(atalho.dia)
+            TipoAtalho.VER_FOLGA, TipoAtalho.AMANHA, TipoAtalho.FERIADO -> atalho.dia?.let(onAbrirDia)
+            TipoAtalho.QUANDO_DA -> onQuandoDa()
+            TipoAtalho.PERGUNTAR_IA -> onPerguntarIA()
+        }
+    }
     val margem = Modifier
         .limitarLargura()
         .padding(horizontal = Espaco.lg)
@@ -106,16 +117,8 @@ fun TelaInicio(
                 TiraDias(voce, eventos, feriados, onAbrirDia)
             }
 
-            item(key = "acoes") {
-                Row(margem, horizontalArrangement = Arrangement.SpaceEvenly) {
-                    AcaoRapida(Icones.Relogio, "Quando dá?", onClick = onQuandoDa)
-                    AcaoRapida(Icones.Lua, "Sono", destaque = voce.sono == null, onClick = onEditarSono)
-                    AcaoRapida(Icones.Editar, "Mudar dia") { onAbrirDia(diaHoje) }
-                }
-            }
-
-            if (encontro != null) {
-                item(key = "encontro") { CartaoEncontro(encontro, { onPlanejar(encontro) }, margem) }
+            item(key = "atalhos") {
+                GradeAtalhos(atalhos, onAbrir = ::abrirAtalho, modifier = margem)
             }
 
             // Sozinha, esta seção só repetiria o cartão de cima
@@ -134,21 +137,9 @@ fun TelaInicio(
                 }
             }
 
-            item(key = "linha_tempo") {
-                LinhaDoTempo(pessoas = todas, dia = diaHoje, titulo = "Hoje", modifier = margem)
-            }
-
-            if (folgas.isNotEmpty()) {
-                item(key = "folgas") {
-                    Column(verticalArrangement = Arrangement.spacedBy(Espaco.sm)) {
-                        TituloCurto(if (pessoas.isEmpty()) "Próximas folgas" else "Folgas juntos", Modifier.limitarLargura())
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = Espaco.lg),
-                            horizontalArrangement = Arrangement.spacedBy(Espaco.sm)
-                        ) {
-                            items(folgas) { d -> FolgaCartao(d, feriados[d] != null) { onAbrirDia(d) } }
-                        }
-                    }
+            if (pessoas.isNotEmpty()) {
+                item(key = "linha_tempo") {
+                    LinhaDoTempo(pessoas = todas, dia = diaHoje, titulo = "Hoje", modifier = margem)
                 }
             }
 
@@ -160,7 +151,7 @@ fun TelaInicio(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clickable { onNovoEvento(folgas.firstOrNull()) }
+                                    .clickable { onNovoEvento(voce.proximoDia(diaHoje + 1, livre = true)) }
                                     .padding(Espaco.lg),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -317,62 +308,6 @@ private fun TiraDias(voce: Pessoa, eventos: List<Evento>, feriados: Map<Int, Str
     }
 }
 
-@Composable
-private fun AcaoRapida(icone: ImageVector, rotulo: String, destaque: Boolean = false, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .width(76.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick)
-            .padding(vertical = Espaco.xs),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            Modifier
-                .size(52.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icone, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            if (destaque) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .size(12.dp)
-                        .background(corAmbar(), CircleShape)
-                )
-            }
-        }
-        Spacer(Modifier.height(Espaco.xs))
-        Text(
-            rotulo,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-/** O próximo horário em que todos podem se encontrar, pronto para virar evento. */
-@Composable
-private fun CartaoEncontro(encontro: Encontro, onPlanejar: () -> Unit, modifier: Modifier = Modifier) {
-    Cartao(modifier.fillMaxWidth(), onClick = onPlanejar) {
-        Row(Modifier.padding(Espaco.lg), verticalAlignment = Alignment.CenterVertically) {
-            SeloData(encontro.dia, destaque = true)
-            Spacer(Modifier.width(Espaco.md))
-            Column(Modifier.weight(1f)) {
-                Text("Todos livres", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "${horaCurta(encontro.janela.inicio)} às ${horaCurta(encontro.janela.fim)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(Icones.Adicionar, contentDescription = "Planejar", tint = MaterialTheme.colorScheme.primary)
-        }
-    }
-}
-
 /** Pessoa em círculo: a cor do anel e uma palavra dizem o que ela está fazendo agora. */
 @Composable
 private fun PessoaCirculo(pessoa: Pessoa, onClick: () -> Unit) {
@@ -435,30 +370,6 @@ private fun NovaPessoaCirculo(onClick: () -> Unit) {
         }
         Spacer(Modifier.height(Espaco.xs))
         Text("Adicionar", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-    }
-}
-
-@Composable
-private fun FolgaCartao(dia: Int, feriado: Boolean, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .width(72.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .background(corFundo(StatusDia.FOLGA))
-            .clickable(onClick = onClick)
-            .padding(vertical = Espaco.md),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        val tinta = corConteudo(StatusDia.FOLGA)
-        Text(diaSemanaCurto(dia), style = MaterialTheme.typography.labelMedium, color = tinta)
-        Text(partes(dia).dia.toString(), style = MaterialTheme.typography.titleLarge.numerico, color = tinta)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(mesCurto(dia), style = MaterialTheme.typography.labelSmall, color = tinta)
-            if (feriado) {
-                Spacer(Modifier.width(2.dp))
-                Icon(Icones.Estrela, contentDescription = "Feriado", tint = tinta, modifier = Modifier.size(10.dp))
-            }
-        }
     }
 }
 

@@ -762,10 +762,10 @@ fun FolguiApp(eventoInicial: Int = 0) {
                     onAbrirEvento = { navController.navigate(Rotas.evento(it)) },
                     onNovaPessoa = { navController.navigate(Rotas.pessoa(0)) },
                     onNovoEvento = { navController.navigate(Rotas.novoEvento(it)) },
-                    onPlanejar = { e -> navController.navigate(Rotas.novoEvento(e.dia, e.janela.inicio)) },
+                    onPlanejar = { e -> navController.navigate(Rotas.novoEvento(e.dia, e.janela.inicio, pessoas.map { it.id }.toSet())) },
                     onQuandoDa = { navController.navigate(Rotas.QUANDO_DA) },
                     onVerPessoas = { navController.irParaAba(Rotas.PESSOAS) },
-                    onEditarSono = { editandoSono = true }
+                    onPerguntarIA = { navController.navigate(Rotas.assistente()) }
                 )
             }
 

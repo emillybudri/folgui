@@ -146,6 +146,7 @@ fun TelaFormularioEscala(
     var temSono by rememberSaveable { mutableStateOf(inicial?.sono != null) }
     var dormir by rememberSaveable { mutableIntStateOf((inicial?.sono ?: SONO_PADRAO).inicio) }
     var acordar by rememberSaveable { mutableIntStateOf((inicial?.sono ?: SONO_PADRAO).fim) }
+    var folgaFeriados by rememberSaveable { mutableStateOf(inicial?.folgaFeriados ?: true) }
     var tentouAvancar by rememberSaveable { mutableStateOf(false) }
     var confirmarExclusao by rememberSaveable { mutableStateOf(false) }
 
@@ -180,7 +181,8 @@ fun TelaFormularioEscala(
         descansoMin = if (padrao.filterNotNull().any { it.noturno }) descanso else 0,
         excecoes = inicial?.excecoes.orEmpty(),
         sono = if (temSono) Turno(dormir, acordar) else null,
-        atividades = atividades
+        atividades = atividades,
+        folgaFeriados = folgaFeriados
     )
     val sujeito = if (ehUsuario) "Você" else nome.trim().ifEmpty { "A pessoa" }
 
@@ -489,6 +491,7 @@ fun TelaFormularioEscala(
                             }
 
                             if (ehUsuario) {
+                                SecaoFeriados(folgaFeriados, onMudar = { folgaFeriados = it })
                                 SecaoSono(
                                     temSono = temSono,
                                     dormir = dormir,

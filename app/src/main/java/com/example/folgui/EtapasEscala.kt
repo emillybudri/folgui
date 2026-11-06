@@ -462,6 +462,22 @@ fun SecaoSono(
     }
 }
 
+/** Quem responde "não" nunca recebe a pergunta de cada feriado. */
+@Composable
+fun SecaoFeriados(folga: Boolean, onMudar: (Boolean) -> Unit) {
+    Secao("Sua empresa costuma folgar em feriados?") {
+        Row(horizontalArrangement = Arrangement.spacedBy(Espaco.sm)) {
+            FilterChip(selected = folga, onClick = { onMudar(true) }, label = { Text("Sim") })
+            FilterChip(selected = !folga, onClick = { onMudar(false) }, label = { Text("Não") })
+        }
+        Text(
+            if (folga) "Perto de cada feriado, perguntamos se você vai folgar." else "Os feriados seguem a sua escala normal.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 fun SecaoCidade(cidade: String, onCidade: (String) -> Unit) {
     Secao("Cidade") {

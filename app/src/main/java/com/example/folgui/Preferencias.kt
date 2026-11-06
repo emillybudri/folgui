@@ -30,6 +30,7 @@ private val CHAVE_SONO = stringPreferencesKey("sono")
 val CHAVE_VISAO = stringPreferencesKey("visao_calendario")
 val CHAVE_NUVEM_EM = stringPreferencesKey("nuvem_atualizada_em")
 private val CHAVE_ATIVIDADES = stringPreferencesKey("atividades")
+private val CHAVE_FERIADOS = stringPreferencesKey("folga_feriados")
 
 data class Perfil(
     val nome: String,
@@ -41,7 +42,8 @@ data class Perfil(
     val padrao: List<Turno?>,
     val descansoMin: Int,
     val sono: Turno?,
-    val atividades: List<Atividade> = emptyList()
+    val atividades: List<Atividade> = emptyList(),
+    val folgaFeriados: Boolean = true
 ) {
     fun comoPessoa(excecoes: Map<Int, Excecao>) = Pessoa(
         id = Pessoa.ID_VOCE,
@@ -54,7 +56,8 @@ data class Perfil(
         descansoMin = descansoMin,
         excecoes = excecoes,
         sono = sono,
-        atividades = atividades
+        atividades = atividades,
+        folgaFeriados = folgaFeriados
     )
 }
 
@@ -121,5 +124,6 @@ suspend fun Context.salvarPerfilNasPreferencias(pessoa: Pessoa, cidade: String) 
         prefs[CHAVE_DESCANSO] = pessoa.descansoMin.toString()
         prefs[CHAVE_SONO] = pessoa.sono?.codigo ?: ""
         prefs[CHAVE_ATIVIDADES] = atividadesParaTexto(pessoa.atividades)
+        prefs[CHAVE_FERIADOS] = if (pessoa.folgaFeriados) "sim" else "nao"
     }
 }

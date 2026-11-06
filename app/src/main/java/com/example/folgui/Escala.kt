@@ -279,7 +279,9 @@ data class Pessoa(
     /** Horário de dormir (início) e de acordar (fim). Nada é sugerido nesse trecho. */
     val sono: Turno? = null,
     /** Outro emprego, faculdade e afins, além da escala principal. */
-    val atividades: List<Atividade> = emptyList()
+    val atividades: List<Atividade> = emptyList(),
+    /** A empresa costuma folgar em feriados? Se não, o app nem pergunta. */
+    val folgaFeriados: Boolean = true
 ) {
     val ehVoce: Boolean get() = id == ID_VOCE
 
@@ -548,9 +550,16 @@ fun melhoresDias(
         .take(quantidade)
         .map { it.first }
 
-/** Feriado ainda sem resposta: a escala não sabe se a empresa abre nesse dia. */
+/** Faltando quantos dias o feriado aparece na tela inicial. */
+const val DIAS_AVISO_FERIADO = 7
+
+/** Feriado ainda sem resposta, em dia de trabalho, para quem costuma folgar nessas datas. */
 fun Pessoa.perguntarFeriado(dia: Int, diaHoje: Int = hoje()): Boolean =
-    dia >= diaHoje && !emFerias(dia) && dia !in excecoes
+    folgaFeriados && dia >= diaHoje && !emFerias(dia) && dia !in excecoes && turnoPelaEscala(dia) != null
+
+/** O feriado que a tela inicial deve perguntar agora, se houver. */
+fun Pessoa.feriadoParaPerguntar(feriados: Set<Int>, diaHoje: Int = hoje()): Int? =
+    feriados.sorted().firstOrNull { it <= diaHoje + DIAS_AVISO_FERIADO && perguntarFeriado(it, diaHoje) }
 
 /** Guarda a resposta como mudança no dia, assim o calendário e as sugestões já a levam em conta. */
 fun Pessoa.respostaFeriado(dia: Int, trabalha: Boolean): Excecao =

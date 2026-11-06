@@ -75,8 +75,7 @@ fun TelaInicio(
     val encontro = remember(todas) {
         if (pessoas.isEmpty()) null else proximosEncontros(todas, duracao = 120, quantidade = 1).firstOrNull()
     }
-    val feriadoSemResposta = feriados.keys.sorted()
-        .firstOrNull { it <= diaHoje + 45 && voce.perguntarFeriado(it, diaHoje) }
+    val feriadoSemResposta = voce.feriadoParaPerguntar(feriados.keys, diaHoje)
     val margem = Modifier
         .limitarLargura()
         .padding(horizontal = Espaco.lg)
@@ -479,10 +478,10 @@ fun PerguntaFeriado(dia: Int, nome: String, onResponder: (Int, Boolean) -> Unit,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Text("Você trabalhará neste dia?", style = MaterialTheme.typography.titleMedium, color = corAmbarConteudo())
+            Text("Você vai folgar neste dia?", style = MaterialTheme.typography.titleMedium, color = corAmbarConteudo())
             Row(horizontalArrangement = Arrangement.spacedBy(Espaco.sm)) {
-                FilledTonalButton(onClick = { onResponder(dia, true) }, modifier = Modifier.weight(1f)) { Text("Sim") }
-                FilledTonalButton(onClick = { onResponder(dia, false) }, modifier = Modifier.weight(1f)) { Text("Não") }
+                FilledTonalButton(onClick = { onResponder(dia, false) }, modifier = Modifier.weight(1f)) { Text("Sim") }
+                FilledTonalButton(onClick = { onResponder(dia, true) }, modifier = Modifier.weight(1f)) { Text("Não") }
             }
         }
     }

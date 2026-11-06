@@ -109,6 +109,7 @@ fun dadosParaTexto(dados: DadosNuvem): String {
         .put("descanso", p.descansoMin)
         .put("sono", p.sono?.codigo ?: "")
         .put("atividades", atividadesParaTexto(p.atividades))
+        .put("folgaFeriados", p.folgaFeriados)
     val pessoas = JSONArray().apply {
         dados.pessoas.forEach { q ->
             put(
@@ -165,7 +166,8 @@ fun textoParaDados(texto: String): DadosNuvem? = try {
         padrao = textoParaPadrao(p.getString("padrao")) ?: error("ciclo inválido"),
         descansoMin = p.getInt("descanso"),
         sono = Turno.deCodigo(p.getString("sono")),
-        atividades = textoParaAtividades(p.optString("atividades"))
+        atividades = textoParaAtividades(p.optString("atividades")),
+        folgaFeriados = p.optBoolean("folgaFeriados", true)
     )
     val listaPessoas = raiz.getJSONArray("pessoas")
     val pessoas = (0 until listaPessoas.length()).map { i ->

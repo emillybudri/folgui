@@ -6,11 +6,14 @@ App Android para quem trabalha em escala: mostra de um jeito simples quais dias 
 
 - **Escalas:** semanal, 12x36, 24x48, 2x2, 4x2, 5x1, 6x1 ou um ciclo personalizado, com férias, trocas de plantão e folgas extras.
 - **Agenda em quatro visões:** mês (com o turno em cada dia), semana (hora a hora), lista e ano.
-- **Horário de sono:** nada é sugerido nesse trecho, e marcar algo ali pede confirmação.
-- **Compromissos:** criar, editar, remarcar com sugestões de horários livres e excluir, com lembrete. Tudo que é marcado no Folgui vai para a Google Agenda e continua igual lá. Os criados na Google Agenda aparecem no app e abrem nela para edição.
+- **Horário de sono:** a sugestão acompanha o horário de trabalho (quem entra às 6h não acorda às 7h). Nada é sugerido nesse trecho, e marcar algo ali pede confirmação.
+- **Compromissos:** o fim é opcional. Criar, editar, remarcar com sugestões de horários livres e excluir, com lembrete. Tudo que é marcado no Folgui vai para a Google Agenda e continua igual lá. Os criados na Google Agenda aparecem no app e abrem nela para edição.
 - **Conta (Google ou e-mail):** o login vem antes do cadastro e guarda escala, atividades, pessoas e eventos na conta. Tudo volta ao entrar em outro celular.
+- **Amigos com Folgui:** cada pessoa tem um código para enviar a um amigo. Conectados, os dois veem a escala um do outro, atualizada sozinha, e podem mandar compromissos como convite. Sono, eventos e nomes de atividades não são compartilhados. Quem não tem o app continua podendo ser cadastrado à mão.
+- **Início que muda com a semana:** atalhos ilustrados mostram a próxima folga, o dia em que todos estão livres, o trabalho de amanhã e o próximo feriado. Só quem folga em feriados vê a pergunta, e só na semana anterior à data.
+- **Apresentação e modo fácil:** quem abre o app pela primeira vez vê um passo a passo, que pode ser revisto no perfil. O modo fácil aumenta os textos do app inteiro.
 - **Segundo emprego ou faculdade:** cada atividade tem nome e escala própria e conta nos horários ocupados.
-- **Assistente com IA (Gemini):** fica na barra do topo e aceita texto ou áudio. Mostra o que entendeu, confere o pedido contra a escala e só altera algo depois da confirmação.
+- **Assistente com IA (Gemini):** fica na barra do topo e aceita texto ou áudio, que aparece transcrito na conversa. Mostra o que entendeu, confere o pedido contra a escala e só altera algo depois da confirmação.
 
 ## Requisitos da atividade
 
@@ -20,7 +23,7 @@ App Android para quem trabalha em escala: mostra de um jeito simples quais dias 
 | Navegação entre telas | `NavHost` e `NavController` em [FolguiApp.kt](app/src/main/java/com/example/folgui/FolguiApp.kt) |
 | DataStore | Perfil, escala e preferências em [FolguiApp.kt](app/src/main/java/com/example/folgui/FolguiApp.kt) |
 | SQLite | [BancoHelper.kt](app/src/main/java/com/example/folgui/BancoHelper.kt) e [FolguiRepository.kt](app/src/main/java/com/example/folgui/FolguiRepository.kt) |
-| API REST | BrasilAPI (feriados) e Open-Meteo (previsão do tempo) em [ApiRepository.kt](app/src/main/java/com/example/folgui/ApiRepository.kt) |
+| API REST | BrasilAPI (feriados) em [ApiRepository.kt](app/src/main/java/com/example/folgui/ApiRepository.kt) |
 | Notificações locais | [AlarmScheduler.kt](app/src/main/java/com/example/folgui/AlarmScheduler.kt), [ReminderReceiver.kt](app/src/main/java/com/example/folgui/ReminderReceiver.kt) e [NotificationHelper.kt](app/src/main/java/com/example/folgui/NotificationHelper.kt) |
 
 ## Demonstração
@@ -37,7 +40,7 @@ Todos os arquivos ficam em `app/src/main/java/com/example/folgui`. Para quem est
 | Navegação | `Navegacao.kt`: rotas e barra de abas |
 | Regras da escala | `Escala.kt` e `Datas.kt`: não dependem de tela e têm testes |
 | Dados no aparelho | `Preferencias.kt` (DataStore), `BancoHelper.kt` e `FolguiRepository.kt` (SQLite) |
-| Serviços externos | `ApiRepository.kt` (REST), `AgendaRepository.kt`, `NuvemRepository.kt` e `AssistenteIA.kt` |
+| Serviços externos | `ApiRepository.kt` (REST), `AgendaRepository.kt`, `NuvemRepository.kt`, `AmigosRepository.kt` e `AssistenteIA.kt` |
 | Lembretes | `AlarmScheduler.kt`, `ReminderReceiver.kt`, `NotificationHelper.kt` e `BootReceiver.kt` |
 | Telas | Arquivos `Telas*.kt` e `EtapasEscala.kt` |
 | Aparência | `Tema.kt` e `Componentes.kt` |
@@ -50,7 +53,7 @@ O módulo `wear` é um app para Wear OS (Galaxy Watch, Pixel Watch). Não funcio
 2. O relógio transforma a fala em texto e manda para o celular pelo Bluetooth.
 3. No celular, o `RelogioService` chama a mesma IA do assistente e confere conflitos com trabalho e sono.
 4. O relógio mostra e fala o resumo e pergunta "É isso mesmo?".
-5. Com o "Sim", o celular salva o evento, agenda o lembrete e grava na Google Agenda, se ela estiver conectada.
+5. Com o "Sim", o celular salva o evento, agenda o lembrete, grava na Google Agenda, se ela estiver conectada, e manda o convite aos amigos conectados que participam.
 
 Escala, eventos e chave do Gemini ficam só no celular. Pelo relógio dá para marcar compromissos; o resto se faz no celular.
 Os dois apps precisam ter o mesmo `applicationId` e a mesma assinatura para conversar.
